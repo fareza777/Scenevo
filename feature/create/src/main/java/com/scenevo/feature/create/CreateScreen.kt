@@ -142,8 +142,9 @@ fun CreateRoute(
                                 label = "file terpasang",
                             )
                             ScenevoPrimaryButton(
-                                "Pilih dari galeri",
+                                if (state.isCachingStock) "Mengimpor visual…" else "Pilih dari galeri",
                                 onClick = { pickVisuals.launch(arrayOf("image/*", "video/*")) },
+                                enabled = !state.isCachingStock,
                             )
                             SegmentedChoice(
                                 options = listOf("Foto (default)", "Video BYOK"),

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.scenevo.core.common.LocalMediaCache
 import com.scenevo.core.common.MediaUris
 import com.scenevo.core.common.PersistableUri
 import com.scenevo.domain.model.MediaType
@@ -24,11 +25,13 @@ import com.scenevo.domain.usecase.SplitScriptIntoScenesUseCase
 import com.scenevo.engine.tts.SmartNarrationEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
 
@@ -101,28 +104,31 @@ class CreateViewModel @Inject constructor(
 
     fun attachVisuals(uris: List<String>) {
         if (uris.isEmpty()) return
-        PersistableUri.takeReadAll(context, uris)
-        val assets = uris.mapIndexed { index, uriString ->
-            VisualAsset(
-                id = UUID.randomUUID().toString(),
-                uri = uriString,
-                type = detectMediaType(uriString),
-                displayName = "Asset ${index + 1}",
-            )
-        }
-        applyVisuals(assets)
-    }
-
-    private fun detectMediaType(uriString: String): MediaType {
-        val uri = Uri.parse(uriString)
-        val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull().orEmpty()
-        return when {
-            mime.startsWith("video/") -> MediaType.VIDEO
-            mime.startsWith("audio/") -> MediaType.AUDIO
-            mime.startsWith("image/") -> MediaType.IMAGE
-            uriString.contains("video", ignoreCase = true) -> MediaType.VIDEO
-            uriString.contains("audio", ignoreCase = true) -> MediaType.AUDIO
-            else -> MediaType.IMAGE
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCachingStock = true, error = null) }
+            val assets = withContext(Dispatchers.IO) {
+                uris.mapIndexedNotNull { index, uriString ->
+                    PersistableUri.takeRead(context, uriString)
+                    val cached = LocalMediaCache.import(context, uriString) ?: return@mapIndexedNotNull null
+                    VisualAsset(
+                        id = UUID.randomUUID().toString(),
+                        uri = cached.fileUri,
+                        type = if (cached.isVideo) MediaType.VIDEO else MediaType.IMAGE,
+                        displayName = "Asset ${index + 1}",
+                    )
+                }
+            }
+            if (assets.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        isCachingStock = false,
+                        error = "Gagal import visual dari galeri. Coba foto JPG/PNG lain.",
+                    )
+                }
+                return@launch
+            }
+            applyVisuals(assets)
+            _uiState.update { it.copy(isCachingStock = false) }
         }
     }
 
@@ -168,7 +174,7 @@ class CreateViewModel @Inject constructor(
             val asset = assets[index % assets.size]
             scene.copy(
                 visual = asset,
-                transition = if (index == 0) TransitionType.CUT else TransitionType.CROSSFADE,
+                transition = TransitionType.CUT,
                 motion = MotionEffect.KEN_BURNS_ZOOM_IN,
             )
         }
@@ -216,18 +222,24 @@ class CreateViewModel @Inject constructor(
     }
 
     fun attachMusic(uri: String) {
-        PersistableUri.takeRead(context, uri)
-        val name = uri.substringAfterLast('/').substringAfterLast('%').ifBlank { "Background music" }
-        _uiState.update {
-            it.copy(
-                musicTrack = MusicTrack(
-                    id = UUID.randomUUID().toString(),
-                    uri = uri,
-                    displayName = UriDecode(name),
-                    volume = it.musicVolume,
-                ),
-                error = null,
-            )
+        viewModelScope.launch {
+            PersistableUri.takeRead(context, uri)
+            val cached = withContext(Dispatchers.IO) {
+                LocalMediaCache.import(context, uri)
+            }
+            val resolvedUri = cached?.fileUri ?: uri
+            val name = uri.substringAfterLast('/').substringAfterLast('%').ifBlank { "Background music" }
+            _uiState.update {
+                it.copy(
+                    musicTrack = MusicTrack(
+                        id = UUID.randomUUID().toString(),
+                        uri = resolvedUri,
+                        displayName = UriDecode(name),
+                        volume = it.musicVolume,
+                    ),
+                    error = null,
+                )
+            }
         }
     }
 

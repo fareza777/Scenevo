@@ -169,7 +169,12 @@ fun ExportRoute(
                     ScenevoPrimaryButton("Kembali", onClick = onBack)
                 }
                 else -> {
-                    ScenevoSecondaryButton("Tutup", onClick = onBack)
+                    Text(
+                        "Jangan keluar layar ini sampai selesai. Keluar = batalkan render.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ScenevoColors.MistDim,
+                    )
+                    ScenevoSecondaryButton("Batalkan", onClick = onBack)
                 }
             }
         }

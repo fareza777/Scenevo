@@ -184,27 +184,27 @@ class ExportViewModel @Inject constructor(
                     }
                 }
             } catch (cancelled: CancellationException) {
-                recoverStuckRendering(project)
+                recoverStuckRendering(project, failed = false)
                 throw cancelled
             } catch (t: Throwable) {
-                recoverStuckRendering(project)
+                recoverStuckRendering(project, failed = true)
                 _uiState.update {
                     it.copy(
                         status = RenderStatus.FAILED,
-                        error = t.message ?: "Export failed",
-                        message = t.message ?: "Export failed",
+                        error = t.message ?: "Export gagal",
+                        message = t.message ?: "Export gagal",
                     )
                 }
             }
         }
     }
 
-    private suspend fun recoverStuckRendering(project: Project) {
+    private suspend fun recoverStuckRendering(project: Project, failed: Boolean) {
         if (!markedRendering) return
         runCatching {
             projectRepository.upsert(
                 project.copy(
-                    status = ProjectStatus.FAILED,
+                    status = if (failed) ProjectStatus.FAILED else ProjectStatus.READY,
                     updatedAt = System.currentTimeMillis(),
                 ),
             )
@@ -213,6 +213,7 @@ class ExportViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        // Leaving the screen cancels render — mark READY so Home does not show false FAILED.
         if (markedRendering) {
             val snapshot = _uiState.value.project
             if (snapshot != null) {
@@ -220,7 +221,7 @@ class ExportViewModel @Inject constructor(
                     runCatching {
                         projectRepository.upsert(
                             snapshot.copy(
-                                status = ProjectStatus.FAILED,
+                                status = ProjectStatus.READY,
                                 updatedAt = System.currentTimeMillis(),
                             ),
                         )

@@ -12,13 +12,12 @@ import com.scenevo.domain.model.TransitionType
  */
 object TransitionEffectFactory {
 
-    fun bumperDurationUs(transition: TransitionType): Long? = when (transition) {
-        TransitionType.CUT -> null
-        TransitionType.CROSSFADE -> 220_000L
-        TransitionType.FADE_TO_BLACK -> 480_000L
-        TransitionType.SLIDE_LEFT -> 300_000L
-        TransitionType.ZOOM -> 320_000L
-    }
+    /**
+     * Black-frame bumpers were disabled: they lengthened the video track without
+     * extending audio layers and caused Media3 mux failures on many devices.
+     * Visual polish still comes from [clipEffects].
+     */
+    fun bumperDurationUs(transition: TransitionType): Long? = null
 
     fun clipEffects(motion: MotionEffect, transition: TransitionType): List<Effect> = buildList {
         add(motionEffect(motion))

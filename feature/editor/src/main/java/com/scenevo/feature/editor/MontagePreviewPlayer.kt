@@ -80,32 +80,60 @@ fun MontagePreviewPlayer(
     var positionMs by remember { mutableFloatStateOf(0f) }
     var durationMs by remember { mutableFloatStateOf(timeline?.totalDurationMs?.toFloat() ?: 1f) }
     var currentSubtitle by remember { mutableStateOf<String?>(null) }
+    var playbackError by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(player) {
-        onDispose { player.release() }
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                playbackError = error.message ?: "Preview gagal memutar media"
+                playing = false
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                playing = isPlaying
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
     }
 
     LaunchedEffect(clips) {
+        playbackError = null
         player.clearMediaItems()
         clips.forEach { clip ->
-            val durationMs = (clip.endMs - clip.startMs).coerceAtLeast(500L)
+            val clipDurationMs = (clip.endMs - clip.startMs).coerceAtLeast(500L)
+            val uri = MediaUris.parse(clip.mediaUri)
             val builder = MediaItem.Builder()
-                .setUri(MediaUris.parse(clip.mediaUri))
+                .setUri(uri)
                 .setMediaId(clip.id)
+            val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull()
+                ?: when {
+                    clip.mediaUri.contains(".png", true) -> "image/png"
+                    clip.mediaUri.contains(".webp", true) -> "image/webp"
+                    clip.mediaUri.contains(".mp4", true) -> "video/mp4"
+                    clip.mediaType == MediaType.VIDEO -> "video/mp4"
+                    else -> "image/jpeg"
+                }
+            builder.setMimeType(mime)
             if (clip.mediaType == MediaType.IMAGE) {
-                // Still images need an explicit clip duration for ExoPlayer playlist timing.
-                builder.setImageDurationMs(durationMs)
+                builder.setImageDurationMs(clipDurationMs)
             } else if (clip.mediaType == MediaType.VIDEO) {
                 builder.setClippingConfiguration(
                     MediaItem.ClippingConfiguration.Builder()
-                        .setEndPositionMs(durationMs)
+                        .setEndPositionMs(clipDurationMs)
                         .build(),
                 )
             }
             player.addMediaItem(builder.build())
         }
-        player.prepare()
-        durationMs = (timeline?.totalDurationMs ?: player.duration.coerceAtLeast(1)).toFloat()
+        if (clips.isNotEmpty()) {
+            player.prepare()
+            player.seekTo(0, 0)
+        }
+        durationMs = (timeline?.totalDurationMs ?: 1L).toFloat().coerceAtLeast(1f)
     }
 
     LaunchedEffect(player, playing) {
@@ -168,6 +196,17 @@ fun MontagePreviewPlayer(
                     modifier = Modifier.align(Alignment.Center),
                 )
             }
+            if (playbackError != null) {
+                Text(
+                    playbackError.orEmpty(),
+                    color = ScenevoColors.Danger,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp),
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))
@@ -227,7 +266,7 @@ fun MontagePreviewPlayer(
         val imageHint = clips.any { it.mediaType == MediaType.IMAGE }
         if (imageHint) {
             Text(
-                "Image scenes play as stills in preview; export applies full Ken Burns duration.",
+                "Preview: foto tampil sebagai still. Tekan ▶ untuk play. Suara baru di export.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = ScenevoColors.MistDim,
             )
