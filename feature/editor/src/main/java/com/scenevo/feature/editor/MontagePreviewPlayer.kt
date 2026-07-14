@@ -44,6 +44,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.scenevo.core.common.MediaUris
 import com.scenevo.core.designsystem.theme.ScenevoColors
 import com.scenevo.domain.model.AspectRatio
 import com.scenevo.domain.model.MediaType
@@ -87,13 +88,21 @@ fun MontagePreviewPlayer(
     LaunchedEffect(clips) {
         player.clearMediaItems()
         clips.forEach { clip ->
-            val item = MediaItem.Builder()
-                .setUri(clip.mediaUri)
+            val durationMs = (clip.endMs - clip.startMs).coerceAtLeast(500L)
+            val builder = MediaItem.Builder()
+                .setUri(MediaUris.parse(clip.mediaUri))
                 .setMediaId(clip.id)
-                .build()
-            // Images need a duration via clipping configuration isn't set here —
-            // for video clips ExoPlayer plays naturally; images show as single frame briefly.
-            player.addMediaItem(item)
+            if (clip.mediaType == MediaType.IMAGE) {
+                // Still images need an explicit clip duration for ExoPlayer playlist timing.
+                builder.setImageDurationMs(durationMs)
+            } else if (clip.mediaType == MediaType.VIDEO) {
+                builder.setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setEndPositionMs(durationMs)
+                        .build(),
+                )
+            }
+            player.addMediaItem(builder.build())
         }
         player.prepare()
         durationMs = (timeline?.totalDurationMs ?: player.duration.coerceAtLeast(1)).toFloat()

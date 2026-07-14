@@ -7,8 +7,10 @@ import com.scenevo.domain.model.VoiceProvider
 import com.scenevo.domain.repository.SettingsRepository
 import com.scenevo.domain.repository.VoicePackRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 import java.util.UUID
@@ -73,39 +75,43 @@ class PreferLocalNarrationEngine @Inject constructor(
         text: String,
         locale: Locale,
         enginePackage: String,
-    ): TtsResult = suspendCancellableCoroutine { cont ->
-        lateinit var engine: TextToSpeech
-        engine = TextToSpeech(context, { status ->
-            if (status != TextToSpeech.SUCCESS) {
-                if (cont.isActive) cont.resumeWithException(IllegalStateException("Neural TTS init failed"))
-                return@TextToSpeech
-            }
-            engine.language = locale
-            val outDir = File(context.cacheDir, "tts").apply { mkdirs() }
-            val outFile = File(outDir, "piper_${UUID.randomUUID()}.wav")
-            val words = text.split(Regex("\\s+")).size.coerceAtLeast(1)
-            val estimateMs = ((words / 145f) * 60_000f).toLong().coerceAtLeast(1500L)
-            val utteranceId = UUID.randomUUID().toString()
-            engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) = Unit
-                override fun onDone(utteranceId: String?) {
-                    engine.shutdown()
-                    if (cont.isActive) cont.resume(TtsResult(outFile, estimateMs))
+    ): TtsResult = withContext(Dispatchers.Main.immediate) {
+        suspendCancellableCoroutine { cont ->
+            lateinit var engine: TextToSpeech
+            engine = TextToSpeech(context, { status ->
+                if (status != TextToSpeech.SUCCESS) {
+                    if (cont.isActive) cont.resumeWithException(IllegalStateException("Neural TTS init failed"))
+                    return@TextToSpeech
                 }
+                engine.language = locale
+                val outDir = File(context.filesDir, "tts").apply { mkdirs() }
+                val outFile = File(outDir, "piper_${UUID.randomUUID()}.wav")
+                val words = text.split(Regex("\\s+")).size.coerceAtLeast(1)
+                val estimateMs = ((words / 145f) * 60_000f).toLong().coerceAtLeast(1500L)
+                val utteranceId = UUID.randomUUID().toString()
+                engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) = Unit
+                    override fun onDone(utteranceId: String?) {
+                        engine.shutdown()
+                        if (cont.isActive) cont.resume(TtsResult(outFile, estimateMs))
+                    }
 
-                @Deprecated("Deprecated in Java")
-                override fun onError(utteranceId: String?) {
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(utteranceId: String?) {
+                        engine.shutdown()
+                        if (cont.isActive) {
+                            cont.resumeWithException(IllegalStateException("Piper synthesis failed"))
+                        }
+                    }
+                })
+                val code = engine.synthesizeToFile(text, null, outFile, utteranceId)
+                if (code != TextToSpeech.SUCCESS && cont.isActive) {
                     engine.shutdown()
-                    if (cont.isActive) cont.resumeWithException(IllegalStateException("Piper synthesis failed"))
+                    cont.resumeWithException(IllegalStateException("Piper enqueue failed"))
                 }
-            })
-            val code = engine.synthesizeToFile(text, null, outFile, utteranceId)
-            if (code != TextToSpeech.SUCCESS && cont.isActive) {
-                engine.shutdown()
-                cont.resumeWithException(IllegalStateException("Piper enqueue failed"))
-            }
-        }, enginePackage)
-        cont.invokeOnCancellation { runCatching { engine.shutdown() } }
+            }, enginePackage)
+            cont.invokeOnCancellation { runCatching { engine.shutdown() } }
+        }
     }
 
     override fun shutdown() = androidTts.shutdown()

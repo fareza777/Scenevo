@@ -1,12 +1,15 @@
 package com.scenevo.feature.create
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.scenevo.core.common.MediaUris
 import com.scenevo.core.common.PersistableUri
 import com.scenevo.domain.model.MediaType
 import com.scenevo.domain.model.MotionEffect
 import com.scenevo.domain.model.MusicTrack
+import com.scenevo.domain.model.Project
 import com.scenevo.domain.model.ProjectStatus
 import com.scenevo.domain.model.Scene
 import com.scenevo.domain.model.StockPhoto
@@ -15,7 +18,6 @@ import com.scenevo.domain.model.VisualAsset
 import com.scenevo.domain.model.VoiceTrack
 import com.scenevo.domain.repository.ProjectRepository
 import com.scenevo.domain.repository.StockRepository
-import com.scenevo.domain.usecase.CreateProjectUseCase
 import com.scenevo.domain.usecase.SplitScriptIntoScenesUseCase
 import com.scenevo.engine.tts.SmartNarrationEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,7 +54,6 @@ data class CreateUiState(
 class CreateViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val splitScript: SplitScriptIntoScenesUseCase,
-    private val createProject: CreateProjectUseCase,
     private val projectRepository: ProjectRepository,
     private val narrationEngine: SmartNarrationEngine,
     private val stockRepository: StockRepository,
@@ -77,22 +78,42 @@ class CreateViewModel @Inject constructor(
         }
     }
 
-    fun nextStep() = _uiState.update { it.copy(step = (it.step + 1).coerceAtMost(4)) }
-    fun prevStep() = _uiState.update { it.copy(step = (it.step - 1).coerceAtLeast(0)) }
+    fun nextStep() = _uiState.update { it.copy(step = (it.step + 1).coerceAtMost(4), error = null) }
+    fun prevStep() = _uiState.update { it.copy(step = (it.step - 1).coerceAtLeast(0), error = null) }
+
+    fun continueFromVisuals() {
+        if (_uiState.value.attachedCount == 0 || _uiState.value.scenes.none { it.visual != null }) {
+            _uiState.update { it.copy(error = "Pasang minimal 1 visual (galeri atau stock) dulu.") }
+            return
+        }
+        nextStep()
+    }
 
     fun attachVisuals(uris: List<String>) {
         if (uris.isEmpty()) return
         PersistableUri.takeReadAll(context, uris)
-        val assets = uris.mapIndexed { index, uri ->
-            val isVideo = uri.contains("video", ignoreCase = true)
+        val assets = uris.mapIndexed { index, uriString ->
             VisualAsset(
                 id = UUID.randomUUID().toString(),
-                uri = uri,
-                type = if (isVideo) MediaType.VIDEO else MediaType.IMAGE,
+                uri = uriString,
+                type = detectMediaType(uriString),
                 displayName = "Asset ${index + 1}",
             )
         }
         applyVisuals(assets)
+    }
+
+    private fun detectMediaType(uriString: String): MediaType {
+        val uri = Uri.parse(uriString)
+        val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull().orEmpty()
+        return when {
+            mime.startsWith("video/") -> MediaType.VIDEO
+            mime.startsWith("audio/") -> MediaType.AUDIO
+            mime.startsWith("image/") -> MediaType.IMAGE
+            uriString.contains("video", ignoreCase = true) -> MediaType.VIDEO
+            uriString.contains("audio", ignoreCase = true) -> MediaType.AUDIO
+            else -> MediaType.IMAGE
+        }
     }
 
     fun searchStock() {
@@ -159,7 +180,7 @@ class CreateViewModel @Inject constructor(
                 .onSuccess { outcome ->
                     val track = VoiceTrack(
                         id = UUID.randomUUID().toString(),
-                        uri = outcome.result.audioFile.absolutePath,
+                        uri = MediaUris.fileUri(outcome.result.audioFile),
                         provider = outcome.provider,
                         durationMs = outcome.result.durationMsEstimate,
                     )
@@ -211,19 +232,24 @@ class CreateViewModel @Inject constructor(
 
     fun saveProject(onDone: (String) -> Unit) {
         viewModelScope.launch {
+            val state = _uiState.value
+            if (state.scenes.none { it.visual != null }) {
+                _uiState.update { it.copy(error = "Tidak bisa simpan: belum ada visual di scene.") }
+                return@launch
+            }
             _uiState.update { it.copy(isSaving = true, error = null) }
             runCatching {
-                val state = _uiState.value
-                val base = createProject(
+                val now = System.currentTimeMillis()
+                val project = Project(
+                    id = UUID.randomUUID().toString(),
                     title = state.title.ifBlank { "Untitled Montage" },
                     script = state.script,
-                )
-                val project = base.copy(
                     scenes = state.scenes,
                     voiceTrack = state.voiceTrack,
                     musicTrack = state.musicTrack,
                     status = ProjectStatus.READY,
-                    updatedAt = System.currentTimeMillis(),
+                    createdAt = now,
+                    updatedAt = now,
                 )
                 projectRepository.upsert(project)
                 project

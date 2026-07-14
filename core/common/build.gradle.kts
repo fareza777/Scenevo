@@ -19,4 +19,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.timber)
     implementation("javax.inject:javax.inject:1")
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
 }

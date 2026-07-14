@@ -13,6 +13,7 @@ import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
+import com.scenevo.core.common.MediaUris
 import com.scenevo.domain.model.AspectRatio
 import com.scenevo.domain.model.AudioKind
 import com.scenevo.domain.model.ExportResolution
@@ -100,7 +101,7 @@ class Media3VideoRenderer @Inject constructor(
                 }
 
                 val mediaItem = MediaItem.Builder()
-                    .setUri(Uri.parse(clip.mediaUri))
+                    .setUri(MediaUris.parse(clip.mediaUri))
                     .setMimeType(
                         when (clip.mediaType) {
                             MediaType.VIDEO -> MimeTypes.VIDEO_MP4
@@ -147,7 +148,7 @@ class Media3VideoRenderer @Inject constructor(
                 processors += GainAudioProcessor(layer.volume.coerceIn(0.05f, 1f))
             }
             val audioItem = EditedMediaItem.Builder(
-                MediaItem.fromUri(Uri.parse(layer.uri)),
+                MediaItem.fromUri(MediaUris.parse(layer.uri)),
             )
                 .setDurationUs((layer.endMs - layer.startMs).coerceAtLeast(500L) * 1000)
                 .setEffects(Effects(processors, emptyList()))

@@ -165,14 +165,18 @@ fun CreateRoute(
                             if (state.isCachingStock) {
                                 Text("Caching stock to device…", color = ScenevoColors.Signal)
                             }
-                            ScenevoPrimaryButton("Lanjut voice", onClick = viewModel::nextStep)
+                            ScenevoPrimaryButton(
+                                "Lanjut voice",
+                                onClick = viewModel::continueFromVisuals,
+                                enabled = state.attachedCount > 0 && !state.isCachingStock,
+                            )
                             ScenevoSecondaryButton("Kembali", onClick = viewModel::prevStep)
                         }
                         3 -> {
                             ScreenSection(
                                 eyebrow = "Step 04",
                                 title = "Narasi offline",
-                                body = "Android TTS default. Piper pack / sherpa engine jika tersedia.",
+                                body = "Opsional. Android TTS / Piper — bisa dilewati.",
                             )
                             if (state.voiceStatus != null) {
                                 Text(state.voiceStatus!!, color = ScenevoColors.Signal)

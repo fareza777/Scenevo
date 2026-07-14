@@ -12,6 +12,11 @@ import com.scenevo.domain.repository.ProjectRepository
 import com.scenevo.engine.render.ExportPublisher
 import com.scenevo.engine.render.VideoRenderer
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +50,8 @@ class ExportViewModel @Inject constructor(
     val uiState: StateFlow<ExportUiState> = _uiState.asStateFlow()
 
     private var lastShareIntent: Intent? = null
+    private var exportJob: Job? = null
+    private var markedRendering = false
 
     init {
         viewModelScope.launch {
@@ -80,8 +87,10 @@ class ExportViewModel @Inject constructor(
     fun startExport() {
         if (_uiState.value.started) return
         _uiState.update { it.copy(started = true, message = "Preparing…") }
-        viewModelScope.launch {
-            val project = projectRepository.getProject(projectId)
+        exportJob = viewModelScope.launch {
+            // Prefer in-memory project so resolution/music toggles are not raced against DB.
+            val project = _uiState.value.project
+                ?: projectRepository.getProject(projectId)
             if (project == null) {
                 _uiState.update {
                     it.copy(
@@ -92,86 +101,135 @@ class ExportViewModel @Inject constructor(
                 }
                 return@launch
             }
-            projectRepository.upsert(project.copy(status = ProjectStatus.RENDERING))
-            val result = videoRenderer.render(project) { progress ->
-                _uiState.update {
-                    it.copy(
-                        status = progress.job.status,
-                        progress = progress.job.progress,
-                        message = progress.message,
-                        outputPath = progress.job.outputUri,
-                        error = progress.job.errorMessage,
-                    )
+            try {
+                markedRendering = true
+                projectRepository.upsert(project.copy(status = ProjectStatus.RENDERING))
+                val result = videoRenderer.render(project) { progress ->
+                    _uiState.update {
+                        it.copy(
+                            status = progress.job.status,
+                            progress = progress.job.progress,
+                            message = progress.message,
+                            outputPath = progress.job.outputUri,
+                            error = progress.job.errorMessage,
+                        )
+                    }
                 }
-            }
-            val nextStatus = when (result.status) {
-                RenderStatus.COMPLETED -> ProjectStatus.EXPORTED
-                else -> ProjectStatus.FAILED
-            }
-            projectRepository.upsert(
-                project.copy(
-                    status = nextStatus,
-                    updatedAt = System.currentTimeMillis(),
-                ),
-            )
+                val nextStatus = when (result.status) {
+                    RenderStatus.COMPLETED -> ProjectStatus.EXPORTED
+                    else -> ProjectStatus.FAILED
+                }
+                projectRepository.upsert(
+                    project.copy(
+                        status = nextStatus,
+                        updatedAt = System.currentTimeMillis(),
+                    ),
+                )
+                markedRendering = false
 
-            if (result.status == RenderStatus.COMPLETED) {
-                val outputUri = result.outputUri
-                if (outputUri != null) {
-                    runCatching { exportPublisher.publish(outputUri) }
-                        .onSuccess { published ->
-                            lastShareIntent = exportPublisher.shareIntent(
-                                published.shareUri,
-                                published.displayName,
+                if (result.status == RenderStatus.COMPLETED) {
+                    val outputUri = result.outputUri
+                    if (outputUri != null) {
+                        runCatching { exportPublisher.publish(outputUri) }
+                            .onSuccess { published ->
+                                lastShareIntent = exportPublisher.shareIntent(
+                                    published.shareUri,
+                                    published.displayName,
+                                )
+                                _uiState.update {
+                                    it.copy(
+                                        status = result.status,
+                                        progress = result.progress,
+                                        outputPath = outputUri,
+                                        galleryUri = published.galleryUri?.toString(),
+                                        shareReady = true,
+                                        publishMessage = if (published.galleryUri != null) {
+                                            "Saved to Movies/Scenevo"
+                                        } else {
+                                            "Ready to share"
+                                        },
+                                        message = "Export complete",
+                                    )
+                                }
+                            }
+                            .onFailure { err ->
+                                _uiState.update {
+                                    it.copy(
+                                        status = result.status,
+                                        progress = result.progress,
+                                        outputPath = outputUri,
+                                        message = "Export complete",
+                                        publishMessage = err.message ?: "Gallery save skipped",
+                                    )
+                                }
+                            }
+                    } else {
+                        _uiState.update {
+                            it.copy(
+                                status = result.status,
+                                progress = result.progress,
+                                message = "Export complete",
                             )
-                            _uiState.update {
-                                it.copy(
-                                    status = result.status,
-                                    progress = result.progress,
-                                    outputPath = outputUri,
-                                    galleryUri = published.galleryUri?.toString(),
-                                    shareReady = true,
-                                    publishMessage = if (published.galleryUri != null) {
-                                        "Saved to Movies/Scenevo"
-                                    } else {
-                                        "Ready to share"
-                                    },
-                                    message = "Export complete",
-                                )
-                            }
                         }
-                        .onFailure { err ->
-                            _uiState.update {
-                                it.copy(
-                                    status = result.status,
-                                    progress = result.progress,
-                                    outputPath = outputUri,
-                                    message = "Export complete",
-                                    publishMessage = err.message ?: "Gallery save skipped",
-                                )
-                            }
-                        }
+                    }
                 } else {
                     _uiState.update {
                         it.copy(
                             status = result.status,
                             progress = result.progress,
-                            message = "Export complete",
+                            outputPath = result.outputUri,
+                            error = result.errorMessage,
+                            message = result.errorMessage ?: "Export finished",
                         )
                     }
                 }
-            } else {
+            } catch (cancelled: CancellationException) {
+                recoverStuckRendering(project)
+                throw cancelled
+            } catch (t: Throwable) {
+                recoverStuckRendering(project)
                 _uiState.update {
                     it.copy(
-                        status = result.status,
-                        progress = result.progress,
-                        outputPath = result.outputUri,
-                        error = result.errorMessage,
-                        message = result.errorMessage ?: "Export finished",
+                        status = RenderStatus.FAILED,
+                        error = t.message ?: "Export failed",
+                        message = t.message ?: "Export failed",
                     )
                 }
             }
         }
+    }
+
+    private suspend fun recoverStuckRendering(project: Project) {
+        if (!markedRendering) return
+        runCatching {
+            projectRepository.upsert(
+                project.copy(
+                    status = ProjectStatus.FAILED,
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+        markedRendering = false
+    }
+
+    override fun onCleared() {
+        if (markedRendering) {
+            val snapshot = _uiState.value.project
+            if (snapshot != null) {
+                CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                    runCatching {
+                        projectRepository.upsert(
+                            snapshot.copy(
+                                status = ProjectStatus.FAILED,
+                                updatedAt = System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+                }
+            }
+            markedRendering = false
+        }
+        super.onCleared()
     }
 
     fun consumeShareIntent(): Intent? = lastShareIntent

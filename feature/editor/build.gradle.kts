@@ -21,6 +21,7 @@ android {
 dependencies {
     implementation(project(":domain"))
     implementation(project(":core:designsystem"))
+    implementation(project(":core:common"))
     implementation(project(":engine:timeline"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
