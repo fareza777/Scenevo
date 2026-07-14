@@ -1,0 +1,23 @@
+# Built artifacts
+/.gradle/
+**/build/
+/local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Secrets
+**/secrets.properties
+**/*.jks
+**/*.keystore
+
+# Kotlin
+.kotlin/
