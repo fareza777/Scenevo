@@ -11,6 +11,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.scenevo.domain.model.AiProvider
 import com.scenevo.domain.model.AiProviderConfig
+import com.scenevo.domain.model.AppPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
@@ -23,6 +24,7 @@ class SettingsDataSource(
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
     private val aiConfigKey = stringPreferencesKey("ai_config")
+    private val appPrefsKey = stringPreferencesKey("app_prefs")
 
     private val encryptedPrefs: SharedPreferences by lazy {
         val masterKey = MasterKey.Builder(context)
@@ -50,6 +52,19 @@ class SettingsDataSource(
         }
     }
 
+    fun observeAppPreferences(): Flow<AppPreferences> =
+        context.settingsDataStore.data.map { prefs ->
+            prefs[appPrefsKey]?.let {
+                runCatching { json.decodeFromString<AppPreferences>(it) }.getOrNull()
+            } ?: AppPreferences()
+        }
+
+    suspend fun updateAppPreferences(config: AppPreferences) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[appPrefsKey] = json.encodeToString(config)
+        }
+    }
+
     fun saveApiKey(providerKey: String, rawKey: String) {
         encryptedPrefs.edit().putString(providerKey, rawKey).apply()
     }
@@ -61,4 +76,8 @@ class SettingsDataSource(
     fun getApiKey(providerKey: String): String? = encryptedPrefs.getString(providerKey, null)
 
     fun providerKeyName(provider: AiProvider): String = "api_key_${provider.name.lowercase()}"
+
+    companion object {
+        const val PEXELS_KEY = "api_key_pexels"
+    }
 }

@@ -133,8 +133,8 @@ fun CreateRoute(
                         2 -> {
                             ScreenSection(
                                 eyebrow = "Step 03",
-                                title = "Visual lokal",
-                                body = "Gambar/video dari perangkat — round-robin ke tiap scene.",
+                                title = "Visual lokal + stock",
+                                body = "Galeri offline, atau Pexels (consent + Wi‑Fi di Settings).",
                             )
                             StatPanel(
                                 value = "${state.attachedCount}",
@@ -144,6 +144,27 @@ fun CreateRoute(
                                 "Pilih dari galeri",
                                 onClick = { pickVisuals.launch(arrayOf("image/*", "video/*")) },
                             )
+                            ScenevoField(
+                                value = state.stockQuery,
+                                onValueChange = viewModel::updateStockQuery,
+                                label = "Cari stock (Pexels)",
+                                singleLine = true,
+                            )
+                            ScenevoSecondaryButton(
+                                if (state.isSearchingStock) "Searching…" else "Cari stock",
+                                onClick = viewModel::searchStock,
+                                enabled = !state.isSearchingStock && !state.isCachingStock,
+                            )
+                            state.stockResults.take(6).forEach { photo ->
+                                ScenevoSecondaryButton(
+                                    text = "${photo.photographer} · ${photo.width}×${photo.height}",
+                                    onClick = { viewModel.attachStock(photo) },
+                                    enabled = !state.isCachingStock,
+                                )
+                            }
+                            if (state.isCachingStock) {
+                                Text("Caching stock to device…", color = ScenevoColors.Signal)
+                            }
                             ScenevoPrimaryButton("Lanjut voice", onClick = viewModel::nextStep)
                             ScenevoSecondaryButton("Kembali", onClick = viewModel::prevStep)
                         }
@@ -151,7 +172,7 @@ fun CreateRoute(
                             ScreenSection(
                                 eyebrow = "Step 04",
                                 title = "Narasi offline",
-                                body = "Android TTS di perangkat. Bisa dilewati.",
+                                body = "Android TTS default. Piper pack / sherpa engine jika tersedia.",
                             )
                             if (state.voiceStatus != null) {
                                 Text(state.voiceStatus!!, color = ScenevoColors.Signal)

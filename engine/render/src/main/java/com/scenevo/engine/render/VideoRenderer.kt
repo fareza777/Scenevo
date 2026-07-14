@@ -6,7 +6,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.effect.Presentation
-import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
@@ -18,11 +17,9 @@ import com.scenevo.domain.model.AspectRatio
 import com.scenevo.domain.model.AudioKind
 import com.scenevo.domain.model.ExportResolution
 import com.scenevo.domain.model.MediaType
-import com.scenevo.domain.model.MotionEffect
 import com.scenevo.domain.model.Project
 import com.scenevo.domain.model.RenderJob
 import com.scenevo.domain.model.RenderStatus
-import com.scenevo.domain.model.TransitionType
 import com.scenevo.engine.timeline.TimelineComposer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +40,7 @@ data class RenderProgress(
 /**
  * On-device renderer using Media3 Transformer.
  * Burns subtitles via TextOverlay, writes sidecar SRT, mixes voice + ducked music.
+ * Advanced transitions via [TransitionEffectFactory]; optional FFmpeg polish via [FfmpegTransitionBridge].
  */
 interface VideoRenderer {
     suspend fun render(
@@ -54,6 +52,7 @@ interface VideoRenderer {
 @Singleton
 class Media3VideoRenderer @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val ffmpegBridge: FfmpegTransitionBridge,
 ) : VideoRenderer {
 
     override suspend fun render(
@@ -95,7 +94,7 @@ class Media3VideoRenderer @Inject constructor(
         val editedItems = buildList {
             timeline.clips.forEachIndexed { index, clip ->
                 if (index > 0) {
-                    bumperDurationUs(clip.transition)?.let { us ->
+                    TransitionEffectFactory.bumperDurationUs(clip.transition)?.let { us ->
                         add(blackBumper(context, durationUs = us))
                     }
                 }
@@ -119,7 +118,7 @@ class Media3VideoRenderer @Inject constructor(
                             Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP,
                         ),
                     )
-                    add(motionEffect(clip.motion))
+                    addAll(TransitionEffectFactory.clipEffects(clip.motion, clip.transition))
                     val cueText = timeline.subtitleCues
                         .firstOrNull { it.startMs == clip.startMs && it.endMs == clip.endMs }
                         ?.text
@@ -164,10 +163,16 @@ class Media3VideoRenderer @Inject constructor(
         val result = runTransformer(composition, outFile.absolutePath)
         result.fold(
             onSuccess = {
+                job = job.copy(progress = 0.9f)
+                onProgress(RenderProgress(job, "Polishing transitions…"))
+                val polished = runCatching {
+                    ffmpegBridge.polish(outFile.absolutePath, project.id)
+                }.getOrDefault(outFile.absolutePath)
+
                 job.copy(
                     status = RenderStatus.COMPLETED,
                     progress = 1f,
-                    outputUri = outFile.absolutePath,
+                    outputUri = polished,
                     finishedAt = System.currentTimeMillis(),
                 ).also {
                     onProgress(
@@ -195,13 +200,6 @@ class Media3VideoRenderer @Inject constructor(
         )
     }
 
-    private fun bumperDurationUs(transition: TransitionType): Long? = when (transition) {
-        TransitionType.CUT -> null
-        TransitionType.CROSSFADE -> 200_000L
-        TransitionType.FADE_TO_BLACK -> 420_000L
-        TransitionType.SLIDE_LEFT, TransitionType.ZOOM -> 280_000L
-    }
-
     private fun resolveOutputSize(aspect: AspectRatio, resolution: ExportResolution): Pair<Int, Int> {
         val shortSide = when (resolution) {
             ExportResolution.SD_720 -> 720
@@ -213,16 +211,6 @@ class Media3VideoRenderer @Inject constructor(
             AspectRatio.SQUARE_1_1 -> shortSide to shortSide
             AspectRatio.HORIZONTAL_16_9 -> (shortSide * 16 / 9) to shortSide
         }
-    }
-
-    private fun motionEffect(motion: MotionEffect) = when (motion) {
-        MotionEffect.NONE -> ScaleAndRotateTransformation.Builder().setScale(1f, 1f).build()
-        MotionEffect.KEN_BURNS_ZOOM_IN,
-        MotionEffect.KEN_BURNS_ZOOM_OUT,
-        -> ScaleAndRotateTransformation.Builder().setScale(1.08f, 1.08f).build()
-        MotionEffect.PAN_LEFT,
-        MotionEffect.PAN_RIGHT,
-        -> ScaleAndRotateTransformation.Builder().setScale(1.12f, 1.12f).build()
     }
 
     private fun blackBumper(context: Context, durationUs: Long): EditedMediaItem {

@@ -222,3 +222,38 @@ enum class AiProvider {
     GEMINI_USER_KEY,
     OLLAMA_LOCAL,
 }
+
+@Serializable
+data class AppPreferences(
+    val stockConsent: Boolean = false,
+    val stockWifiOnly: Boolean = true,
+    val preferPiper: Boolean = false,
+    val piperPackId: String? = null,
+)
+
+@Serializable
+data class StockPhoto(
+    val id: String,
+    val previewUrl: String,
+    val downloadUrl: String,
+    val photographer: String,
+    val width: Int,
+    val height: Int,
+    val alt: String = "",
+)
+
+@Serializable
+data class VoicePackInfo(
+    val id: String,
+    val displayName: String,
+    val localeTag: String,
+    val installed: Boolean,
+    val sizeLabel: String,
+    val source: VoicePackSource,
+)
+
+@Serializable
+enum class VoicePackSource {
+    DOWNLOAD,
+    PLAY_ASSET_DELIVERY,
+}

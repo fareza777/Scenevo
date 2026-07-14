@@ -1,12 +1,13 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
 
 android {
-    namespace = "com.scenevo.engine.tts"
+    namespace = "com.scenevo.engine.stock"
     compileSdk = 35
     defaultConfig { minSdk = 26 }
     compileOptions {
@@ -18,10 +19,11 @@ android {
 
 dependencies {
     implementation(project(":domain"))
+    implementation(project(":core:common"))
     implementation(project(":core:datastore"))
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
-    implementation(libs.play.asset.delivery)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.timber)

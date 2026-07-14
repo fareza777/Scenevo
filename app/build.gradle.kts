@@ -15,10 +15,12 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
+
+    assetPacks += setOf(":assetpacks:piper_voices")
 
     buildTypes {
         release {
@@ -66,6 +68,7 @@ dependencies {
     implementation(project(":engine:timeline"))
     implementation(project(":engine:render"))
     implementation(project(":engine:tts"))
+    implementation(project(":engine:stock"))
     implementation(project(":feature:home"))
     implementation(project(":feature:create"))
     implementation(project(":feature:editor"))

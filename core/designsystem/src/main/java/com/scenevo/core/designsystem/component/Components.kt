@@ -145,16 +145,18 @@ fun ScenevoSecondaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     TextButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.fillMaxWidth().height(48.dp),
         shape = RoundedCornerShape(12.dp),
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelLarge,
-            color = ScenevoColors.MistDim,
+            color = if (enabled) ScenevoColors.MistDim else ScenevoColors.Line,
         )
     }
 }

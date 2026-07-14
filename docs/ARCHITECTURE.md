@@ -12,9 +12,10 @@ OpenMontage is a **desktop agent + Remotion/FFmpeg** pipeline. On Android Play S
 | Secrets | EncryptedSharedPreferences | BYO API keys never in plaintext |
 | Preview | Media3 ExoPlayer | Google-supported, hardware decode |
 | Export | Media3 Transformer | Official on-device composition/export |
-| Hard effects later | FFmpeg behind `VideoRenderer` | Crossfade graphs, ASS subtitles, complex filters |
+| Transitions | `TransitionEffectFactory` + `FfmpegTransitionBridge` | Media3 effects now; FFmpeg polish pluggable |
 | Default voice | Android TTS | Zero download, offline |
-| Neural voice later | Piper ONNX (optional pack) | Still on-device |
+| Neural voice | Piper pack + PAD / sherpa engine | Optional on-device |
+| Stock | Pexels (consent + Wi‑Fi) | Cached under `files/stock_cache` |
 | State | ViewModel + Flow | Lifecycle-safe, testable |
 | DI | Hilt | Standard for multi-module Android |
 
@@ -31,14 +32,16 @@ UI (feature/*)
 Render path:
 
 ```
-Project → TimelineComposer → VideoRenderer (Media3)
-                              └─ (future) FfmpegVideoRenderer
+Project → TimelineComposer → Media3VideoRenderer
+                              ├─ TransitionEffectFactory (bumpers + RGB/scale)
+                              └─ FfmpegTransitionBridge (optional post-polish)
 ```
 
 ## Privacy model
 
 - Core features never require network.
-- `INTERNET` permission exists only for optional BYO AI / optional stock download.
+- `INTERNET` + `ACCESS_NETWORK_STATE` exist for optional BYO AI, Pexels stock, and Piper pack download.
+- Stock requires explicit consent + default Wi‑Fi-only gate.
 - Cloud backup of DB + secrets disabled via backup rules.
 - Cleartext network limited to loopback (Ollama).
 

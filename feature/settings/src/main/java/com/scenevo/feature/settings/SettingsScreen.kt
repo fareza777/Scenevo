@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -55,25 +56,44 @@ fun SettingsRoute(
             Spacer(Modifier.height(8.dp))
             ScreenSection(
                 eyebrow = "Privacy bay",
-                title = "AI opsional",
-                body = "Core montage offline. Key disimpan terenkripsi di perangkat.",
+                title = "Offline first",
+                body = "Core montage tetap lokal. Fitur opsional butuh consent eksplisit.",
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Enable optional AI", color = ScenevoColors.Mist, modifier = Modifier.weight(1f))
-                Switch(
-                    checked = state.aiEnabled,
-                    onCheckedChange = viewModel::setAiEnabled,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = ScenevoColors.Ink,
-                        checkedTrackColor = ScenevoColors.Cue,
-                        uncheckedTrackColor = ScenevoColors.Line,
-                    ),
+            Text("STOCK (PEXELS)", color = ScenevoColors.Cue)
+            ToggleRow("Izinkan stock search", state.stockConsent, viewModel::setStockConsent)
+            ToggleRow("Stock hanya lewat Wi‑Fi", state.stockWifiOnly, viewModel::setStockWifiOnly)
+            SettingsField(
+                value = state.pexelsKeyInput,
+                onValueChange = viewModel::setPexelsKeyInput,
+                label = "Pexels API key (BYO)",
+                password = true,
+            )
+            ScenevoSecondaryButton("Simpan Pexels key", onClick = viewModel::savePexelsKey)
+
+            Text("PIPER / VOICE PACK", color = ScenevoColors.Cue)
+            ToggleRow("Prefer Piper local voice", state.preferPiper, viewModel::setPreferPiper)
+            state.voicePacks.forEach { pack ->
+                Text(
+                    "${pack.displayName} · ${if (pack.installed) "installed" else "not installed"} · ${pack.sizeLabel}",
+                    color = ScenevoColors.MistDim,
                 )
             }
+            state.packProgress?.let { progress ->
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = ScenevoColors.Cue,
+                    trackColor = ScenevoColors.Line,
+                )
+            }
+            state.packMessage?.let { Text(it, color = ScenevoColors.Signal) }
+            ScenevoPrimaryButton("Download Piper pack (Wi‑Fi)", onClick = viewModel::installPiperPack)
+            ScenevoSecondaryButton("Request Play Asset pack", onClick = viewModel::requestPadPack)
+            ScenevoSecondaryButton("Uninstall Piper pack", onClick = viewModel::uninstallPiperPack)
+
+            Text("OPTIONAL AI", color = ScenevoColors.Cue)
+            ToggleRow("Enable optional AI", state.aiEnabled, viewModel::setAiEnabled)
 
             if (state.aiEnabled) {
                 Text("Provider", color = ScenevoColors.MistDim)
@@ -114,6 +134,25 @@ fun SettingsRoute(
 
             ScenevoSecondaryButton("Kembali", onClick = onBack)
         }
+    }
+}
+
+@Composable
+private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(label, color = ScenevoColors.Mist, modifier = Modifier.weight(1f))
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = ScenevoColors.Ink,
+                checkedTrackColor = ScenevoColors.Cue,
+                uncheckedTrackColor = ScenevoColors.Line,
+            ),
+        )
     }
 }
 

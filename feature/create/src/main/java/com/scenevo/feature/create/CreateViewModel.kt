@@ -9,14 +9,15 @@ import com.scenevo.domain.model.MotionEffect
 import com.scenevo.domain.model.MusicTrack
 import com.scenevo.domain.model.ProjectStatus
 import com.scenevo.domain.model.Scene
+import com.scenevo.domain.model.StockPhoto
 import com.scenevo.domain.model.TransitionType
 import com.scenevo.domain.model.VisualAsset
-import com.scenevo.domain.model.VoiceProvider
 import com.scenevo.domain.model.VoiceTrack
 import com.scenevo.domain.repository.ProjectRepository
+import com.scenevo.domain.repository.StockRepository
 import com.scenevo.domain.usecase.CreateProjectUseCase
 import com.scenevo.domain.usecase.SplitScriptIntoScenesUseCase
-import com.scenevo.engine.tts.NarrationEngine
+import com.scenevo.engine.tts.SmartNarrationEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,10 @@ data class CreateUiState(
     val voiceStatus: String? = null,
     val musicTrack: MusicTrack? = null,
     val musicVolume: Float = 0.25f,
+    val stockQuery: String = "",
+    val stockResults: List<StockPhoto> = emptyList(),
+    val isSearchingStock: Boolean = false,
+    val isCachingStock: Boolean = false,
     val isSynthesizing: Boolean = false,
     val isSaving: Boolean = false,
     val error: String? = null,
@@ -49,7 +54,8 @@ class CreateViewModel @Inject constructor(
     private val splitScript: SplitScriptIntoScenesUseCase,
     private val createProject: CreateProjectUseCase,
     private val projectRepository: ProjectRepository,
-    private val narrationEngine: NarrationEngine,
+    private val narrationEngine: SmartNarrationEngine,
+    private val stockRepository: StockRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CreateUiState())
@@ -57,6 +63,7 @@ class CreateViewModel @Inject constructor(
 
     fun updateTitle(value: String) = _uiState.update { it.copy(title = value, error = null) }
     fun updateScript(value: String) = _uiState.update { it.copy(script = value, error = null) }
+    fun updateStockQuery(value: String) = _uiState.update { it.copy(stockQuery = value) }
 
     fun splitScenes() {
         val script = _uiState.value.script
@@ -85,6 +92,46 @@ class CreateViewModel @Inject constructor(
                 displayName = "Asset ${index + 1}",
             )
         }
+        applyVisuals(assets)
+    }
+
+    fun searchStock() {
+        val query = _uiState.value.stockQuery
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSearchingStock = true, error = null) }
+            runCatching { stockRepository.search(query) }
+                .onSuccess { photos ->
+                    _uiState.update {
+                        it.copy(isSearchingStock = false, stockResults = photos)
+                    }
+                }
+                .onFailure { err ->
+                    _uiState.update {
+                        it.copy(isSearchingStock = false, error = err.message ?: "Stock search failed")
+                    }
+                }
+        }
+    }
+
+    fun attachStock(photo: StockPhoto) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCachingStock = true, error = null) }
+            runCatching { stockRepository.cachePhoto(photo) }
+                .onSuccess { asset ->
+                    val merged = _uiState.value.visuals + asset
+                    applyVisuals(merged)
+                    _uiState.update { it.copy(isCachingStock = false) }
+                }
+                .onFailure { err ->
+                    _uiState.update {
+                        it.copy(isCachingStock = false, error = err.message ?: "Cache failed")
+                    }
+                }
+        }
+    }
+
+    private fun applyVisuals(assets: List<VisualAsset>) {
+        if (assets.isEmpty()) return
         val scenes = _uiState.value.scenes.mapIndexed { index, scene ->
             val asset = assets[index % assets.size]
             scene.copy(
@@ -108,19 +155,19 @@ class CreateViewModel @Inject constructor(
         if (script.isBlank()) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSynthesizing = true, error = null, voiceStatus = null) }
-            runCatching { narrationEngine.synthesize(script) }
-                .onSuccess { result ->
+            runCatching { narrationEngine.synthesizeSmart(script) }
+                .onSuccess { outcome ->
                     val track = VoiceTrack(
                         id = UUID.randomUUID().toString(),
-                        uri = result.audioFile.absolutePath,
-                        provider = VoiceProvider.ANDROID_TTS,
-                        durationMs = result.durationMsEstimate,
+                        uri = outcome.result.audioFile.absolutePath,
+                        provider = outcome.provider,
+                        durationMs = outcome.result.durationMsEstimate,
                     )
                     _uiState.update {
                         it.copy(
                             isSynthesizing = false,
                             voiceTrack = track,
-                            voiceStatus = "Voice ready (~${result.durationMsEstimate / 1000}s)",
+                            voiceStatus = "${outcome.provider.name} ready (~${outcome.result.durationMsEstimate / 1000}s)",
                         )
                     }
                 }

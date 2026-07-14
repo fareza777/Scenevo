@@ -7,6 +7,7 @@ import com.scenevo.core.datastore.SettingsDataSource
 import com.scenevo.data.mapper.toDomain
 import com.scenevo.data.mapper.toEntity
 import com.scenevo.domain.model.AiProviderConfig
+import com.scenevo.domain.model.AppPreferences
 import com.scenevo.domain.model.AssetSource
 import com.scenevo.domain.model.MediaType
 import com.scenevo.domain.model.Project
@@ -109,6 +110,12 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun updateAiConfig(config: AiProviderConfig) =
         settingsDataSource.updateAiConfig(config)
+
+    override fun observeAppPreferences(): Flow<AppPreferences> =
+        settingsDataSource.observeAppPreferences()
+
+    override suspend fun updateAppPreferences(prefs: AppPreferences) =
+        settingsDataSource.updateAppPreferences(prefs)
 
     override suspend fun saveApiKey(providerKey: String, rawKey: String) =
         settingsDataSource.saveApiKey(providerKey, rawKey)
