@@ -79,5 +79,6 @@ class SettingsDataSource(
 
     companion object {
         const val PEXELS_KEY = "api_key_pexels"
+        const val ELEVENLABS_KEY = "api_key_elevenlabs"
     }
 }

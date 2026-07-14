@@ -4,7 +4,8 @@ import com.scenevo.domain.model.AiProviderConfig
 import com.scenevo.domain.model.AppPreferences
 import com.scenevo.domain.model.Project
 import com.scenevo.domain.model.RenderJob
-import com.scenevo.domain.model.StockPhoto
+import com.scenevo.domain.model.StockKind
+import com.scenevo.domain.model.StockMedia
 import com.scenevo.domain.model.VisualAsset
 import com.scenevo.domain.model.VoicePackInfo
 import kotlinx.coroutines.flow.Flow
@@ -40,8 +41,13 @@ interface SettingsRepository {
 }
 
 interface StockRepository {
-    suspend fun search(query: String, page: Int = 1): List<StockPhoto>
-    suspend fun cachePhoto(photo: StockPhoto): VisualAsset
+    suspend fun search(
+        query: String,
+        kind: StockKind = StockKind.IMAGE,
+        page: Int = 1,
+    ): List<StockMedia>
+
+    suspend fun cache(media: StockMedia): VisualAsset
 }
 
 interface VoicePackRepository {

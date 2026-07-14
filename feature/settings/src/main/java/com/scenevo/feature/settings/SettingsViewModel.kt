@@ -6,6 +6,7 @@ import com.scenevo.core.datastore.SettingsDataSource
 import com.scenevo.domain.model.AiProvider
 import com.scenevo.domain.model.AiProviderConfig
 import com.scenevo.domain.model.AppPreferences
+import com.scenevo.domain.model.VoiceProvider
 import com.scenevo.domain.model.VoicePackInfo
 import com.scenevo.domain.repository.SettingsRepository
 import com.scenevo.domain.repository.VoicePackRepository
@@ -26,7 +27,10 @@ data class SettingsUiState(
     val stockConsent: Boolean = false,
     val stockWifiOnly: Boolean = true,
     val pexelsKeyInput: String = "",
+    val elevenLabsKeyInput: String = "",
+    val elevenLabsVoiceId: String = "JBFqnCBsd6RMkjVDRZzb",
     val preferPiper: Boolean = false,
+    val narrationProvider: VoiceProvider = VoiceProvider.ANDROID_TTS,
     val voicePacks: List<VoicePackInfo> = emptyList(),
     val packProgress: Float? = null,
     val packMessage: String? = null,
@@ -61,6 +65,8 @@ class SettingsViewModel @Inject constructor(
                         stockConsent = prefs.stockConsent,
                         stockWifiOnly = prefs.stockWifiOnly,
                         preferPiper = prefs.preferPiper,
+                        narrationProvider = prefs.narrationProvider,
+                        elevenLabsVoiceId = prefs.elevenLabsVoiceId,
                     )
                 }
             }
@@ -83,6 +89,8 @@ class SettingsViewModel @Inject constructor(
     fun setApiKeyInput(value: String) = _uiState.update { it.copy(apiKeyInput = value) }
     fun setBaseUrl(value: String) = _uiState.update { it.copy(baseUrl = value) }
     fun setPexelsKeyInput(value: String) = _uiState.update { it.copy(pexelsKeyInput = value) }
+    fun setElevenLabsKeyInput(value: String) = _uiState.update { it.copy(elevenLabsKeyInput = value) }
+    fun setElevenLabsVoiceId(value: String) = _uiState.update { it.copy(elevenLabsVoiceId = value) }
 
     fun setStockConsent(value: Boolean) {
         viewModelScope.launch {
@@ -105,6 +113,13 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setNarrationProvider(provider: VoiceProvider) {
+        viewModelScope.launch {
+            val current = currentPrefs()
+            settingsRepository.updateAppPreferences(current.copy(narrationProvider = provider))
+        }
+    }
+
     fun savePexelsKey() {
         viewModelScope.launch {
             val key = _uiState.value.pexelsKeyInput.trim()
@@ -113,6 +128,25 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(pexelsKeyInput = "", savedMessage = "Pexels key saved on device.")
                 }
+            }
+        }
+    }
+
+    fun saveElevenLabsKey() {
+        viewModelScope.launch {
+            val key = _uiState.value.elevenLabsKeyInput.trim()
+            if (key.isNotBlank()) {
+                settingsRepository.saveApiKey(SettingsDataSource.ELEVENLABS_KEY, key)
+            }
+            val voiceId = _uiState.value.elevenLabsVoiceId.trim()
+                .ifBlank { "JBFqnCBsd6RMkjVDRZzb" }
+            val current = currentPrefs()
+            settingsRepository.updateAppPreferences(current.copy(elevenLabsVoiceId = voiceId))
+            _uiState.update {
+                it.copy(
+                    elevenLabsKeyInput = "",
+                    savedMessage = "ElevenLabs BYOK saved on device.",
+                )
             }
         }
     }

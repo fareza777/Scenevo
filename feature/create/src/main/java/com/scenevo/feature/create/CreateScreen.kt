@@ -11,8 +11,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +25,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -43,6 +47,8 @@ import com.scenevo.core.designsystem.component.ScenevoSecondaryButton
 import com.scenevo.core.designsystem.component.ScreenSection
 import com.scenevo.core.designsystem.component.StepChipRow
 import com.scenevo.core.designsystem.theme.ScenevoColors
+import com.scenevo.domain.model.StockKind
+import com.scenevo.domain.model.VoiceProvider
 
 @Composable
 fun CreateRoute(
@@ -134,7 +140,7 @@ fun CreateRoute(
                             ScreenSection(
                                 eyebrow = "Step 03",
                                 title = "Visual lokal + stock",
-                                body = "Galeri offline, atau Pexels (consent + Wi‑Fi di Settings).",
+                                body = "Default: foto Pexels. Video stock opsional (BYOK). Galeri selalu offline.",
                             )
                             StatPanel(
                                 value = "${state.attachedCount}",
@@ -144,10 +150,31 @@ fun CreateRoute(
                                 "Pilih dari galeri",
                                 onClick = { pickVisuals.launch(arrayOf("image/*", "video/*")) },
                             )
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                FilterChip(
+                                    selected = state.stockKind == StockKind.IMAGE,
+                                    onClick = { viewModel.setStockKind(StockKind.IMAGE) },
+                                    label = { Text("Foto (default)") },
+                                    colors = stockChipColors(state.stockKind == StockKind.IMAGE),
+                                )
+                                FilterChip(
+                                    selected = state.stockKind == StockKind.VIDEO,
+                                    onClick = { viewModel.setStockKind(StockKind.VIDEO) },
+                                    label = { Text("Video (BYOK)") },
+                                    colors = stockChipColors(state.stockKind == StockKind.VIDEO),
+                                )
+                            }
                             ScenevoField(
                                 value = state.stockQuery,
                                 onValueChange = viewModel::updateStockQuery,
-                                label = "Cari stock (Pexels)",
+                                label = if (state.stockKind == StockKind.VIDEO) {
+                                    "Cari video stock (Pexels)"
+                                } else {
+                                    "Cari foto stock (Pexels)"
+                                },
                                 singleLine = true,
                             )
                             ScenevoSecondaryButton(
@@ -155,10 +182,11 @@ fun CreateRoute(
                                 onClick = viewModel::searchStock,
                                 enabled = !state.isSearchingStock && !state.isCachingStock,
                             )
-                            state.stockResults.take(6).forEach { photo ->
+                            state.stockResults.take(6).forEach { item ->
+                                val kindLabel = if (item.kind == StockKind.VIDEO) "VIDEO" else "FOTO"
                                 ScenevoSecondaryButton(
-                                    text = "${photo.photographer} · ${photo.width}×${photo.height}",
-                                    onClick = { viewModel.attachStock(photo) },
+                                    text = "$kindLabel · ${item.photographer} · ${item.width}×${item.height}",
+                                    onClick = { viewModel.attachStock(item) },
                                     enabled = !state.isCachingStock,
                                 )
                             }
@@ -175,14 +203,41 @@ fun CreateRoute(
                         3 -> {
                             ScreenSection(
                                 eyebrow = "Step 04",
-                                title = "Narasi offline",
-                                body = "Opsional. Android TTS / Piper — bisa dilewati.",
+                                title = "Narasi",
+                                body = "Default: TTS offline gratis. ElevenLabs opsional (BYOK di Settings).",
                             )
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                FilterChip(
+                                    selected = state.voiceProvider == VoiceProvider.ANDROID_TTS,
+                                    onClick = { viewModel.setVoiceProvider(VoiceProvider.ANDROID_TTS) },
+                                    label = { Text("Offline TTS") },
+                                    colors = stockChipColors(state.voiceProvider == VoiceProvider.ANDROID_TTS),
+                                )
+                                FilterChip(
+                                    selected = state.voiceProvider == VoiceProvider.ELEVENLABS_USER_KEY,
+                                    onClick = {
+                                        viewModel.setVoiceProvider(VoiceProvider.ELEVENLABS_USER_KEY)
+                                    },
+                                    label = { Text("ElevenLabs BYOK") },
+                                    colors = stockChipColors(
+                                        state.voiceProvider == VoiceProvider.ELEVENLABS_USER_KEY,
+                                    ),
+                                )
+                            }
                             if (state.voiceStatus != null) {
                                 Text(state.voiceStatus!!, color = ScenevoColors.Signal)
                             }
                             ScenevoPrimaryButton(
-                                if (state.isSynthesizing) "Generating…" else "Generate TTS offline",
+                                if (state.isSynthesizing) {
+                                    "Generating…"
+                                } else if (state.voiceProvider == VoiceProvider.ELEVENLABS_USER_KEY) {
+                                    "Generate ElevenLabs"
+                                } else {
+                                    "Generate TTS offline"
+                                },
                                 onClick = viewModel::synthesizeVoice,
                                 enabled = !state.isSynthesizing,
                             )
@@ -242,6 +297,14 @@ fun CreateRoute(
         }
     }
 }
+
+@Composable
+private fun stockChipColors(selected: Boolean) = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = ScenevoColors.Cue.copy(alpha = 0.18f),
+    selectedLabelColor = ScenevoColors.CueHot,
+    containerColor = ScenevoColors.Panel,
+    labelColor = ScenevoColors.MistDim,
+)
 
 @Composable
 private fun ScenevoField(

@@ -25,13 +25,18 @@ data class NarrationOutcome(
 )
 
 interface SmartNarrationEngine : NarrationEngine {
-    suspend fun synthesizeSmart(text: String, locale: Locale = Locale.getDefault()): NarrationOutcome
+    suspend fun synthesizeSmart(
+        text: String,
+        locale: Locale = Locale.getDefault(),
+        preferred: VoiceProvider? = null,
+    ): NarrationOutcome
 }
 
 @Singleton
 class PreferLocalNarrationEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val androidTts: AndroidTtsNarrationEngine,
+    private val elevenLabs: ElevenLabsNarrationEngine,
     private val voicePackRepository: VoicePackRepository,
     private val settingsRepository: SettingsRepository,
 ) : SmartNarrationEngine {
@@ -39,12 +44,25 @@ class PreferLocalNarrationEngine @Inject constructor(
     override suspend fun synthesize(text: String, locale: Locale): TtsResult =
         synthesizeSmart(text, locale).result
 
-    override suspend fun synthesizeSmart(text: String, locale: Locale): NarrationOutcome {
+    override suspend fun synthesizeSmart(
+        text: String,
+        locale: Locale,
+        preferred: VoiceProvider?,
+    ): NarrationOutcome {
         val prefs = settingsRepository.observeAppPreferences().first()
-        val packReady = voicePackRepository.isPackReady()
-        val preferPiper = prefs.preferPiper || packReady
+        val choice = preferred ?: prefs.narrationProvider
 
-        if (preferPiper) {
+        if (choice == VoiceProvider.ELEVENLABS_USER_KEY) {
+            val result = elevenLabs.synthesize(text, locale)
+            return NarrationOutcome(result, VoiceProvider.ELEVENLABS_USER_KEY)
+        }
+
+        val packReady = voicePackRepository.isPackReady()
+        val preferPiper = prefs.preferPiper ||
+            choice == VoiceProvider.PIPER_LOCAL ||
+            packReady
+
+        if (preferPiper && choice != VoiceProvider.ANDROID_TTS) {
             val enginePkg = findInstalledNeuralEngine()
             if (enginePkg != null) {
                 val result = synthesizeWithEnginePackage(text, locale, enginePkg)
@@ -53,7 +71,11 @@ class PreferLocalNarrationEngine @Inject constructor(
         }
 
         val fallback = androidTts.synthesize(text, locale)
-        val provider = if (preferPiper && packReady) VoiceProvider.PIPER_LOCAL else VoiceProvider.ANDROID_TTS
+        val provider = if (preferPiper && packReady) {
+            VoiceProvider.PIPER_LOCAL
+        } else {
+            VoiceProvider.ANDROID_TTS
+        }
         return NarrationOutcome(fallback, provider)
     }
 

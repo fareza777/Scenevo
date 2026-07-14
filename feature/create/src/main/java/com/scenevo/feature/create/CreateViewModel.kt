@@ -12,9 +12,11 @@ import com.scenevo.domain.model.MusicTrack
 import com.scenevo.domain.model.Project
 import com.scenevo.domain.model.ProjectStatus
 import com.scenevo.domain.model.Scene
-import com.scenevo.domain.model.StockPhoto
+import com.scenevo.domain.model.StockKind
+import com.scenevo.domain.model.StockMedia
 import com.scenevo.domain.model.TransitionType
 import com.scenevo.domain.model.VisualAsset
+import com.scenevo.domain.model.VoiceProvider
 import com.scenevo.domain.model.VoiceTrack
 import com.scenevo.domain.repository.ProjectRepository
 import com.scenevo.domain.repository.StockRepository
@@ -42,7 +44,9 @@ data class CreateUiState(
     val musicTrack: MusicTrack? = null,
     val musicVolume: Float = 0.25f,
     val stockQuery: String = "",
-    val stockResults: List<StockPhoto> = emptyList(),
+    val stockKind: StockKind = StockKind.IMAGE,
+    val stockResults: List<StockMedia> = emptyList(),
+    val voiceProvider: VoiceProvider = VoiceProvider.ANDROID_TTS,
     val isSearchingStock: Boolean = false,
     val isCachingStock: Boolean = false,
     val isSynthesizing: Boolean = false,
@@ -65,6 +69,12 @@ class CreateViewModel @Inject constructor(
     fun updateTitle(value: String) = _uiState.update { it.copy(title = value, error = null) }
     fun updateScript(value: String) = _uiState.update { it.copy(script = value, error = null) }
     fun updateStockQuery(value: String) = _uiState.update { it.copy(stockQuery = value) }
+    fun setStockKind(kind: StockKind) = _uiState.update {
+        it.copy(stockKind = kind, stockResults = emptyList(), error = null)
+    }
+    fun setVoiceProvider(provider: VoiceProvider) = _uiState.update {
+        it.copy(voiceProvider = provider, error = null)
+    }
 
     fun splitScenes() {
         val script = _uiState.value.script
@@ -118,12 +128,13 @@ class CreateViewModel @Inject constructor(
 
     fun searchStock() {
         val query = _uiState.value.stockQuery
+        val kind = _uiState.value.stockKind
         viewModelScope.launch {
             _uiState.update { it.copy(isSearchingStock = true, error = null) }
-            runCatching { stockRepository.search(query) }
-                .onSuccess { photos ->
+            runCatching { stockRepository.search(query, kind) }
+                .onSuccess { media ->
                     _uiState.update {
-                        it.copy(isSearchingStock = false, stockResults = photos)
+                        it.copy(isSearchingStock = false, stockResults = media)
                     }
                 }
                 .onFailure { err ->
@@ -134,10 +145,10 @@ class CreateViewModel @Inject constructor(
         }
     }
 
-    fun attachStock(photo: StockPhoto) {
+    fun attachStock(media: StockMedia) {
         viewModelScope.launch {
             _uiState.update { it.copy(isCachingStock = true, error = null) }
-            runCatching { stockRepository.cachePhoto(photo) }
+            runCatching { stockRepository.cache(media) }
                 .onSuccess { asset ->
                     val merged = _uiState.value.visuals + asset
                     applyVisuals(merged)
@@ -174,9 +185,10 @@ class CreateViewModel @Inject constructor(
     fun synthesizeVoice() {
         val script = _uiState.value.script
         if (script.isBlank()) return
+        val preferred = _uiState.value.voiceProvider
         viewModelScope.launch {
             _uiState.update { it.copy(isSynthesizing = true, error = null, voiceStatus = null) }
-            runCatching { narrationEngine.synthesizeSmart(script) }
+            runCatching { narrationEngine.synthesizeSmart(script, preferred = preferred) }
                 .onSuccess { outcome ->
                     val track = VoiceTrack(
                         id = UUID.randomUUID().toString(),

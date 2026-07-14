@@ -83,7 +83,8 @@ sdk.dir=C:\\Android\\Sdk
 - [x] Export resolution presets (720p / 1080p / 4K)  
 - [x] Advanced transitions (`TransitionEffectFactory` + `FfmpegTransitionBridge`)  
 - [x] Piper ONNX voice pack download + prefer-local TTS  
-- [x] Stock cache (Pexels) with explicit consent + Wi‑Fi only  
+- [x] Stock cache (Pexels photos default; videos optional BYOK) + consent + Wi‑Fi only  
+- [x] Optional ElevenLabs narration (BYOK)  
 - [x] Play Asset Delivery module for optional voice packs  
 
 ## License

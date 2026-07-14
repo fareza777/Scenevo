@@ -19,6 +19,7 @@ android {
 dependencies {
     implementation(project(":domain"))
     implementation(project(":core:datastore"))
+    implementation(project(":core:common"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
     implementation(libs.play.asset.delivery)

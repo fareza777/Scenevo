@@ -34,6 +34,7 @@ import com.scenevo.core.designsystem.component.ScenevoSecondaryButton
 import com.scenevo.core.designsystem.component.ScreenSection
 import com.scenevo.core.designsystem.theme.ScenevoColors
 import com.scenevo.domain.model.AiProvider
+import com.scenevo.domain.model.VoiceProvider
 
 @Composable
 fun SettingsRoute(
@@ -60,7 +61,7 @@ fun SettingsRoute(
                 body = "Core montage tetap lokal. Fitur opsional butuh consent eksplisit.",
             )
 
-            Text("STOCK (PEXELS)", color = ScenevoColors.Cue)
+            Text("STOCK (PEXELS BYOK)", color = ScenevoColors.Cue)
             ToggleRow("Izinkan stock search", state.stockConsent, viewModel::setStockConsent)
             ToggleRow("Stock hanya lewat Wi‑Fi", state.stockWifiOnly, viewModel::setStockWifiOnly)
             SettingsField(
@@ -70,6 +71,44 @@ fun SettingsRoute(
                 password = true,
             )
             ScenevoSecondaryButton("Simpan Pexels key", onClick = viewModel::savePexelsKey)
+            Text(
+                "Default stock = foto. Video stock opsional di Create wizard.",
+                color = ScenevoColors.MistDim,
+            )
+
+            Text("NARASI", color = ScenevoColors.Cue)
+            Text(
+                "Default: Android TTS offline. ElevenLabs = BYOK opsional.",
+                color = ScenevoColors.MistDim,
+            )
+            ScenevoSecondaryButton(
+                text = if (state.narrationProvider == VoiceProvider.ANDROID_TTS) {
+                    "● Offline TTS (default)"
+                } else {
+                    "Offline TTS (default)"
+                },
+                onClick = { viewModel.setNarrationProvider(VoiceProvider.ANDROID_TTS) },
+            )
+            ScenevoSecondaryButton(
+                text = if (state.narrationProvider == VoiceProvider.ELEVENLABS_USER_KEY) {
+                    "● ElevenLabs BYOK"
+                } else {
+                    "ElevenLabs BYOK"
+                },
+                onClick = { viewModel.setNarrationProvider(VoiceProvider.ELEVENLABS_USER_KEY) },
+            )
+            SettingsField(
+                value = state.elevenLabsKeyInput,
+                onValueChange = viewModel::setElevenLabsKeyInput,
+                label = "ElevenLabs API key (BYO)",
+                password = true,
+            )
+            SettingsField(
+                value = state.elevenLabsVoiceId,
+                onValueChange = viewModel::setElevenLabsVoiceId,
+                label = "ElevenLabs voice ID",
+            )
+            ScenevoSecondaryButton("Simpan ElevenLabs", onClick = viewModel::saveElevenLabsKey)
 
             Text("PIPER / VOICE PACK", color = ScenevoColors.Cue)
             ToggleRow("Prefer Piper local voice", state.preferPiper, viewModel::setPreferPiper)

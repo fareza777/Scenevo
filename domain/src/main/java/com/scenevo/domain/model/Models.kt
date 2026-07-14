@@ -229,10 +229,19 @@ data class AppPreferences(
     val stockWifiOnly: Boolean = true,
     val preferPiper: Boolean = false,
     val piperPackId: String? = null,
+    /** Default offline TTS; ElevenLabs only when user opts in + BYOK. */
+    val narrationProvider: VoiceProvider = VoiceProvider.ANDROID_TTS,
+    val elevenLabsVoiceId: String = "JBFqnCBsd6RMkjVDRZzb",
 )
 
 @Serializable
-data class StockPhoto(
+enum class StockKind {
+    IMAGE,
+    VIDEO,
+}
+
+@Serializable
+data class StockMedia(
     val id: String,
     val previewUrl: String,
     val downloadUrl: String,
@@ -240,7 +249,12 @@ data class StockPhoto(
     val width: Int,
     val height: Int,
     val alt: String = "",
+    val kind: StockKind = StockKind.IMAGE,
+    val durationMs: Long? = null,
 )
+
+/** @deprecated Use [StockMedia]; kept for serialization compatibility aliases. */
+typealias StockPhoto = StockMedia
 
 @Serializable
 data class VoicePackInfo(
