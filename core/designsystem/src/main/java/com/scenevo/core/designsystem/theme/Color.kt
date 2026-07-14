@@ -20,17 +20,24 @@ object ScenevoColors {
 
     val StageGradient = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF171B22),
-            Ink,
-            Color(0xFF0A0C0F),
+            Color(0xFF1A1F28),
+            Color(0xFF10141A),
+            Color(0xFF080A0D),
         ),
     )
 
     val HeroGradient = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF1E2430),
-            Color(0xFF12151B),
+            Color(0xFF242B38),
+            Color(0xFF151922),
             Color(0xFF0B0D10),
+        ),
+    )
+
+    val PanelSheen = Brush.verticalGradient(
+        colors = listOf(
+            Color(0xFF2A323F),
+            Panel,
         ),
     )
 

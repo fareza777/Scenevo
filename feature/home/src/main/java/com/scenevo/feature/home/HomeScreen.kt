@@ -35,6 +35,7 @@ import com.scenevo.core.designsystem.component.ScenevoBackdrop
 import com.scenevo.core.designsystem.component.ScenevoPrimaryButton
 import com.scenevo.core.designsystem.theme.LocalScenevoMotion
 import com.scenevo.core.designsystem.theme.ScenevoColors
+import androidx.compose.material3.MaterialTheme
 import com.scenevo.domain.model.Project
 import java.text.DateFormat
 import java.util.Date
@@ -75,11 +76,22 @@ fun HomeRoute(
                     modifier = Modifier.weight(1f),
                 )
             } else {
-                Text(
-                    text = "RECENT CUTS  ·  long-press for actions",
-                    color = ScenevoColors.MistDim,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                )
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = "RECENT CUTS",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = ScenevoColors.Cue,
+                    )
+                    Text(
+                        text = "Long-press for duplicate or delete",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ScenevoColors.MistDim,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),

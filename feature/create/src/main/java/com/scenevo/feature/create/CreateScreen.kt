@@ -9,12 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,8 +21,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -36,15 +30,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scenevo.core.designsystem.component.BrandMark
+import com.scenevo.core.designsystem.component.FilmPanel
 import com.scenevo.core.designsystem.component.ScenevoBackdrop
 import com.scenevo.core.designsystem.component.ScenevoPrimaryButton
 import com.scenevo.core.designsystem.component.ScenevoSecondaryButton
 import com.scenevo.core.designsystem.component.ScreenSection
+import com.scenevo.core.designsystem.component.SegmentedChoice
 import com.scenevo.core.designsystem.component.StepChipRow
 import com.scenevo.core.designsystem.theme.ScenevoColors
 import com.scenevo.domain.model.StockKind
@@ -150,23 +145,15 @@ fun CreateRoute(
                                 "Pilih dari galeri",
                                 onClick = { pickVisuals.launch(arrayOf("image/*", "video/*")) },
                             )
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                FilterChip(
-                                    selected = state.stockKind == StockKind.IMAGE,
-                                    onClick = { viewModel.setStockKind(StockKind.IMAGE) },
-                                    label = { Text("Foto (default)") },
-                                    colors = stockChipColors(state.stockKind == StockKind.IMAGE),
-                                )
-                                FilterChip(
-                                    selected = state.stockKind == StockKind.VIDEO,
-                                    onClick = { viewModel.setStockKind(StockKind.VIDEO) },
-                                    label = { Text("Video (BYOK)") },
-                                    colors = stockChipColors(state.stockKind == StockKind.VIDEO),
-                                )
-                            }
+                            SegmentedChoice(
+                                options = listOf("Foto (default)", "Video BYOK"),
+                                selectedIndex = if (state.stockKind == StockKind.IMAGE) 0 else 1,
+                                onSelect = { index ->
+                                    viewModel.setStockKind(
+                                        if (index == 0) StockKind.IMAGE else StockKind.VIDEO,
+                                    )
+                                },
+                            )
                             ScenevoField(
                                 value = state.stockQuery,
                                 onValueChange = viewModel::updateStockQuery,
@@ -206,27 +193,19 @@ fun CreateRoute(
                                 title = "Narasi",
                                 body = "Default: TTS offline gratis. ElevenLabs opsional (BYOK di Settings).",
                             )
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                FilterChip(
-                                    selected = state.voiceProvider == VoiceProvider.ANDROID_TTS,
-                                    onClick = { viewModel.setVoiceProvider(VoiceProvider.ANDROID_TTS) },
-                                    label = { Text("Offline TTS") },
-                                    colors = stockChipColors(state.voiceProvider == VoiceProvider.ANDROID_TTS),
-                                )
-                                FilterChip(
-                                    selected = state.voiceProvider == VoiceProvider.ELEVENLABS_USER_KEY,
-                                    onClick = {
-                                        viewModel.setVoiceProvider(VoiceProvider.ELEVENLABS_USER_KEY)
-                                    },
-                                    label = { Text("ElevenLabs BYOK") },
-                                    colors = stockChipColors(
-                                        state.voiceProvider == VoiceProvider.ELEVENLABS_USER_KEY,
-                                    ),
-                                )
-                            }
+                            SegmentedChoice(
+                                options = listOf("Offline TTS", "ElevenLabs BYOK"),
+                                selectedIndex = if (state.voiceProvider == VoiceProvider.ANDROID_TTS) 0 else 1,
+                                onSelect = { index ->
+                                    viewModel.setVoiceProvider(
+                                        if (index == 0) {
+                                            VoiceProvider.ANDROID_TTS
+                                        } else {
+                                            VoiceProvider.ELEVENLABS_USER_KEY
+                                        },
+                                    )
+                                },
+                            )
                             if (state.voiceStatus != null) {
                                 Text(state.voiceStatus!!, color = ScenevoColors.Signal)
                             }
@@ -299,14 +278,6 @@ fun CreateRoute(
 }
 
 @Composable
-private fun stockChipColors(selected: Boolean) = FilterChipDefaults.filterChipColors(
-    selectedContainerColor = ScenevoColors.Cue.copy(alpha = 0.18f),
-    selectedLabelColor = ScenevoColors.CueHot,
-    containerColor = ScenevoColors.Panel,
-    labelColor = ScenevoColors.MistDim,
-)
-
-@Composable
 private fun ScenevoField(
     value: String,
     onValueChange: (String) -> Unit,
@@ -337,14 +308,7 @@ private fun ScenevoField(
 
 @Composable
 private fun SceneBlock(index: Int, text: String, durationLabel: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(ScenevoColors.Panel)
-            .border(1.dp, ScenevoColors.Line, RoundedCornerShape(14.dp))
-            .padding(16.dp),
-    ) {
+    FilmPanel {
         Text(
             text = "SCENE %02d · %s".format(index, durationLabel),
             style = MaterialTheme.typography.labelMedium,
@@ -357,14 +321,7 @@ private fun SceneBlock(index: Int, text: String, durationLabel: String) {
 
 @Composable
 private fun StatPanel(value: String, label: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(ScenevoColors.Panel)
-            .border(1.dp, ScenevoColors.Line, RoundedCornerShape(14.dp))
-            .padding(18.dp),
-    ) {
+    FilmPanel {
         Text(text = value, style = MaterialTheme.typography.headlineMedium, color = ScenevoColors.Mist)
         Text(text = label.uppercase(), style = MaterialTheme.typography.labelMedium, color = ScenevoColors.MistDim)
     }

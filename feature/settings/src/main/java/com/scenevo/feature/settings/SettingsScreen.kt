@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -28,10 +29,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scenevo.core.designsystem.component.BrandMark
+import com.scenevo.core.designsystem.component.FilmPanel
 import com.scenevo.core.designsystem.component.ScenevoBackdrop
 import com.scenevo.core.designsystem.component.ScenevoPrimaryButton
 import com.scenevo.core.designsystem.component.ScenevoSecondaryButton
 import com.scenevo.core.designsystem.component.ScreenSection
+import com.scenevo.core.designsystem.component.SegmentedChoice
 import com.scenevo.core.designsystem.theme.ScenevoColors
 import com.scenevo.domain.model.AiProvider
 import com.scenevo.domain.model.VoiceProvider
@@ -61,110 +64,118 @@ fun SettingsRoute(
                 body = "Core montage tetap lokal. Fitur opsional butuh consent eksplisit.",
             )
 
-            Text("STOCK (PEXELS BYOK)", color = ScenevoColors.Cue)
-            ToggleRow("Izinkan stock search", state.stockConsent, viewModel::setStockConsent)
-            ToggleRow("Stock hanya lewat Wi‑Fi", state.stockWifiOnly, viewModel::setStockWifiOnly)
-            SettingsField(
-                value = state.pexelsKeyInput,
-                onValueChange = viewModel::setPexelsKeyInput,
-                label = "Pexels API key (BYO)",
-                password = true,
-            )
-            ScenevoSecondaryButton("Simpan Pexels key", onClick = viewModel::savePexelsKey)
-            Text(
-                "Default stock = foto. Video stock opsional di Create wizard.",
-                color = ScenevoColors.MistDim,
-            )
-
-            Text("NARASI", color = ScenevoColors.Cue)
-            Text(
-                "Default: Android TTS offline. ElevenLabs = BYOK opsional.",
-                color = ScenevoColors.MistDim,
-            )
-            ScenevoSecondaryButton(
-                text = if (state.narrationProvider == VoiceProvider.ANDROID_TTS) {
-                    "● Offline TTS (default)"
-                } else {
-                    "Offline TTS (default)"
-                },
-                onClick = { viewModel.setNarrationProvider(VoiceProvider.ANDROID_TTS) },
-            )
-            ScenevoSecondaryButton(
-                text = if (state.narrationProvider == VoiceProvider.ELEVENLABS_USER_KEY) {
-                    "● ElevenLabs BYOK"
-                } else {
-                    "ElevenLabs BYOK"
-                },
-                onClick = { viewModel.setNarrationProvider(VoiceProvider.ELEVENLABS_USER_KEY) },
-            )
-            SettingsField(
-                value = state.elevenLabsKeyInput,
-                onValueChange = viewModel::setElevenLabsKeyInput,
-                label = "ElevenLabs API key (BYO)",
-                password = true,
-            )
-            SettingsField(
-                value = state.elevenLabsVoiceId,
-                onValueChange = viewModel::setElevenLabsVoiceId,
-                label = "ElevenLabs voice ID",
-            )
-            ScenevoSecondaryButton("Simpan ElevenLabs", onClick = viewModel::saveElevenLabsKey)
-
-            Text("PIPER / VOICE PACK", color = ScenevoColors.Cue)
-            ToggleRow("Prefer Piper local voice", state.preferPiper, viewModel::setPreferPiper)
-            state.voicePacks.forEach { pack ->
+            SettingsGroup(title = "Stock (Pexels BYOK)") {
+                ToggleRow("Izinkan stock search", state.stockConsent, viewModel::setStockConsent)
+                ToggleRow("Stock hanya lewat Wi‑Fi", state.stockWifiOnly, viewModel::setStockWifiOnly)
+                SettingsField(
+                    value = state.pexelsKeyInput,
+                    onValueChange = viewModel::setPexelsKeyInput,
+                    label = "Pexels API key (BYO)",
+                    password = true,
+                )
+                ScenevoSecondaryButton("Simpan Pexels key", onClick = viewModel::savePexelsKey)
                 Text(
-                    "${pack.displayName} · ${if (pack.installed) "installed" else "not installed"} · ${pack.sizeLabel}",
+                    "Default stock = foto. Video stock opsional di Create wizard.",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = ScenevoColors.MistDim,
                 )
             }
-            state.packProgress?.let { progress ->
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = ScenevoColors.Cue,
-                    trackColor = ScenevoColors.Line,
+
+            SettingsGroup(title = "Narasi") {
+                Text(
+                    "Default: Android TTS offline. ElevenLabs = BYOK opsional.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ScenevoColors.MistDim,
                 )
+                SegmentedChoice(
+                    options = listOf("Offline TTS", "ElevenLabs BYOK"),
+                    selectedIndex = if (state.narrationProvider == VoiceProvider.ANDROID_TTS) 0 else 1,
+                    onSelect = { index ->
+                        viewModel.setNarrationProvider(
+                            if (index == 0) {
+                                VoiceProvider.ANDROID_TTS
+                            } else {
+                                VoiceProvider.ELEVENLABS_USER_KEY
+                            },
+                        )
+                    },
+                )
+                SettingsField(
+                    value = state.elevenLabsKeyInput,
+                    onValueChange = viewModel::setElevenLabsKeyInput,
+                    label = "ElevenLabs API key (BYO)",
+                    password = true,
+                )
+                SettingsField(
+                    value = state.elevenLabsVoiceId,
+                    onValueChange = viewModel::setElevenLabsVoiceId,
+                    label = "ElevenLabs voice ID",
+                )
+                ScenevoSecondaryButton("Simpan ElevenLabs", onClick = viewModel::saveElevenLabsKey)
             }
-            state.packMessage?.let { Text(it, color = ScenevoColors.Signal) }
-            ScenevoPrimaryButton("Download Piper pack (Wi‑Fi)", onClick = viewModel::installPiperPack)
-            ScenevoSecondaryButton("Request Play Asset pack", onClick = viewModel::requestPadPack)
-            ScenevoSecondaryButton("Uninstall Piper pack", onClick = viewModel::uninstallPiperPack)
 
-            Text("OPTIONAL AI", color = ScenevoColors.Cue)
-            ToggleRow("Enable optional AI", state.aiEnabled, viewModel::setAiEnabled)
-
-            if (state.aiEnabled) {
-                Text("Provider", color = ScenevoColors.MistDim)
-                listOf(
-                    AiProvider.OPENAI_USER_KEY to "OpenAI (your key)",
-                    AiProvider.ANTHROPIC_USER_KEY to "Anthropic (your key)",
-                    AiProvider.GEMINI_USER_KEY to "Gemini (your key)",
-                    AiProvider.OLLAMA_LOCAL to "Ollama (local)",
-                ).forEach { (provider, label) ->
-                    val selected = state.provider == provider
-                    ScenevoSecondaryButton(
-                        text = if (selected) "●  $label" else label,
-                        onClick = { viewModel.setProvider(provider) },
+            SettingsGroup(title = "Piper / voice pack") {
+                ToggleRow("Prefer Piper local voice", state.preferPiper, viewModel::setPreferPiper)
+                state.voicePacks.forEach { pack ->
+                    Text(
+                        "${pack.displayName} · ${if (pack.installed) "installed" else "not installed"} · ${pack.sizeLabel}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ScenevoColors.MistDim,
                     )
                 }
-
-                if (state.provider == AiProvider.OLLAMA_LOCAL) {
-                    SettingsField(
-                        value = state.baseUrl,
-                        onValueChange = viewModel::setBaseUrl,
-                        label = "Ollama base URL",
-                    )
-                } else {
-                    SettingsField(
-                        value = state.apiKeyInput,
-                        onValueChange = viewModel::setApiKeyInput,
-                        label = "API key",
-                        password = true,
+                state.packProgress?.let { progress ->
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = ScenevoColors.Cue,
+                        trackColor = ScenevoColors.Line,
                     )
                 }
+                state.packMessage?.let { Text(it, color = ScenevoColors.Signal) }
+                ScenevoPrimaryButton("Download Piper pack (Wi‑Fi)", onClick = viewModel::installPiperPack)
+                ScenevoSecondaryButton("Request Play Asset pack", onClick = viewModel::requestPadPack)
+                ScenevoSecondaryButton("Uninstall Piper pack", onClick = viewModel::uninstallPiperPack)
+            }
 
-                ScenevoPrimaryButton("Simpan AI settings", onClick = viewModel::save)
+            SettingsGroup(title = "Optional AI") {
+                ToggleRow("Enable optional AI", state.aiEnabled, viewModel::setAiEnabled)
+
+                if (state.aiEnabled) {
+                    Text(
+                        "Provider",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = ScenevoColors.MistDim,
+                    )
+                    val providers = listOf(
+                        AiProvider.OPENAI_USER_KEY to "OpenAI",
+                        AiProvider.ANTHROPIC_USER_KEY to "Anthropic",
+                        AiProvider.GEMINI_USER_KEY to "Gemini",
+                        AiProvider.OLLAMA_LOCAL to "Ollama",
+                    )
+                    SegmentedChoice(
+                        options = providers.map { it.second },
+                        selectedIndex = providers.indexOfFirst { it.first == state.provider }
+                            .coerceAtLeast(0),
+                        onSelect = { index -> viewModel.setProvider(providers[index].first) },
+                    )
+
+                    if (state.provider == AiProvider.OLLAMA_LOCAL) {
+                        SettingsField(
+                            value = state.baseUrl,
+                            onValueChange = viewModel::setBaseUrl,
+                            label = "Ollama base URL",
+                        )
+                    } else {
+                        SettingsField(
+                            value = state.apiKeyInput,
+                            onValueChange = viewModel::setApiKeyInput,
+                            label = "API key",
+                            password = true,
+                        )
+                    }
+
+                    ScenevoPrimaryButton("Simpan AI settings", onClick = viewModel::save)
+                }
             }
 
             if (state.savedMessage != null) {
@@ -172,6 +183,25 @@ fun SettingsRoute(
             }
 
             ScenevoSecondaryButton("Kembali", onClick = onBack)
+        }
+    }
+}
+
+@Composable
+private fun SettingsGroup(
+    title: String,
+    content: @Composable () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = ScenevoColors.Cue,
+        )
+        FilmPanel {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                content()
+            }
         }
     }
 }
@@ -208,7 +238,11 @@ private fun SettingsField(
         label = { Text(label) },
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        visualTransformation = if (password) {
+            PasswordVisualTransformation()
+        } else {
+            androidx.compose.ui.text.input.VisualTransformation.None
+        },
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = ScenevoColors.Cue,

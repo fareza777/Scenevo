@@ -1,8 +1,6 @@
 package com.scenevo.feature.editor
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,10 +14,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -35,11 +30,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.scenevo.core.designsystem.component.ActionChip
 import com.scenevo.core.designsystem.component.BrandMark
+import com.scenevo.core.designsystem.component.FilmPanel
 import com.scenevo.core.designsystem.component.ScenevoBackdrop
 import com.scenevo.core.designsystem.component.ScenevoPrimaryButton
 import com.scenevo.core.designsystem.component.ScenevoSecondaryButton
 import com.scenevo.core.designsystem.component.ScreenSection
+import com.scenevo.core.designsystem.component.SegmentedChoice
 import com.scenevo.core.designsystem.theme.ScenevoColors
 import com.scenevo.domain.model.AspectRatio
 import com.scenevo.domain.model.Scene
@@ -85,56 +83,31 @@ fun EditorRoute(
                     .border(1.dp, ScenevoColors.Line, RoundedCornerShape(18.dp)),
             )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                AspectRatio.entries.forEach { ratio ->
-                    FilterChip(
-                        selected = project.aspectRatio == ratio,
-                        onClick = { viewModel.setAspectRatio(ratio) },
-                        label = { Text(ratio.label) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = ScenevoColors.Cue.copy(alpha = 0.18f),
-                            selectedLabelColor = ScenevoColors.CueHot,
-                            containerColor = ScenevoColors.Panel,
-                            labelColor = ScenevoColors.MistDim,
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = project.aspectRatio == ratio,
-                            borderColor = ScenevoColors.Line,
-                            selectedBorderColor = ScenevoColors.Cue.copy(alpha = 0.5f),
+            Text("Aspect ratio", style = MaterialTheme.typography.labelLarge, color = ScenevoColors.Cue)
+            SegmentedChoice(
+                options = AspectRatio.entries.map { it.label },
+                selectedIndex = AspectRatio.entries.indexOf(project.aspectRatio).coerceAtLeast(0),
+                onSelect = { index -> viewModel.setAspectRatio(AspectRatio.entries[index]) },
+            )
+
+            FilmPanel {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Burn-in subtitles",
+                        color = ScenevoColors.Mist,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = project.subtitleStyle.enabled,
+                        onCheckedChange = viewModel::setSubtitlesEnabled,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = ScenevoColors.Ink,
+                            checkedTrackColor = ScenevoColors.Cue,
+                            uncheckedThumbColor = ScenevoColors.MistDim,
+                            uncheckedTrackColor = ScenevoColors.Line,
                         ),
                     )
                 }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(ScenevoColors.Panel)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    "Burn-in subtitles",
-                    color = ScenevoColors.Mist,
-                    modifier = Modifier.weight(1f),
-                )
-                Switch(
-                    checked = project.subtitleStyle.enabled,
-                    onCheckedChange = viewModel::setSubtitlesEnabled,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = ScenevoColors.Ink,
-                        checkedTrackColor = ScenevoColors.Cue,
-                        uncheckedThumbColor = ScenevoColors.MistDim,
-                        uncheckedTrackColor = ScenevoColors.Line,
-                    ),
-                )
             }
 
             LazyColumn(
@@ -157,14 +130,7 @@ fun EditorRoute(
 
             val music = project.musicTrack
             if (music != null) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(ScenevoColors.Panel)
-                        .border(1.dp, ScenevoColors.Line, RoundedCornerShape(14.dp))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                ) {
+                FilmPanel {
                     Text(
                         "Music · ${music.displayName}",
                         color = ScenevoColors.Mist,
@@ -205,14 +171,7 @@ private fun SceneEditCard(
     onCycleMotion: () -> Unit,
     onCycleTransition: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(ScenevoColors.Panel)
-            .border(1.dp, ScenevoColors.Line, RoundedCornerShape(14.dp))
-            .padding(14.dp),
-    ) {
+    FilmPanel {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "SCENE %02d".format(scene.index + 1),
@@ -247,28 +206,21 @@ private fun SceneEditCard(
                 Text("+0.5s", color = ScenevoColors.MistDim)
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(10.dp))
         Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FilterChip(
-                selected = true,
+            ActionChip(
+                label = scene.motion.name.lowercase().replace('_', ' '),
                 onClick = onCycleMotion,
-                label = { Text(scene.motion.name.lowercase().replace('_', ' ')) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = ScenevoColors.PanelLift,
-                    selectedLabelColor = ScenevoColors.Mist,
-                ),
+                modifier = Modifier.weight(1f),
             )
-            FilterChip(
-                selected = true,
+            ActionChip(
+                label = "fx · ${scene.transition.name.lowercase().replace('_', ' ')}",
                 onClick = onCycleTransition,
-                label = { Text("fx · ${scene.transition.name.lowercase().replace('_', ' ')}") },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = ScenevoColors.Cue.copy(alpha = 0.14f),
-                    selectedLabelColor = ScenevoColors.CueHot,
-                ),
+                accent = true,
+                modifier = Modifier.weight(1f),
             )
         }
     }
