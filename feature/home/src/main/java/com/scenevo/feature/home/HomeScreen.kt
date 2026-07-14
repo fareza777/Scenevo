@@ -76,7 +76,7 @@ fun HomeRoute(
                 )
             } else {
                 Text(
-                    text = "RECENT CUTS  ·  long-press to delete",
+                    text = "RECENT CUTS  ·  long-press for actions",
                     color = ScenevoColors.MistDim,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
@@ -95,7 +95,7 @@ fun HomeRoute(
                                 meta = projectMeta(project),
                                 status = project.status.name,
                                 onClick = { onOpenProject(project.id) },
-                                onLongClick = { viewModel.requestDelete(project) },
+                                onLongClick = { viewModel.openActions(project) },
                             )
                         }
                     }
@@ -114,6 +114,32 @@ fun HomeRoute(
                 )
             }
         }
+    }
+
+    extras.actionTarget?.let { project ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissActions,
+            title = { Text(project.title) },
+            text = { Text("Duplicate untuk variasi, atau hapus montage dari perangkat.") },
+            confirmButton = {
+                TextButton(onClick = viewModel::duplicateFromActions) {
+                    Text("Duplicate", color = ScenevoColors.CueHot)
+                }
+            },
+            dismissButton = {
+                Column {
+                    TextButton(onClick = viewModel::requestDeleteFromActions) {
+                        Text("Hapus", color = ScenevoColors.Danger)
+                    }
+                    TextButton(onClick = viewModel::dismissActions) {
+                        Text("Batal", color = ScenevoColors.MistDim)
+                    }
+                }
+            },
+            containerColor = ScenevoColors.Panel,
+            titleContentColor = ScenevoColors.Mist,
+            textContentColor = ScenevoColors.MistDim,
+        )
     }
 
     extras.pendingDelete?.let { project ->

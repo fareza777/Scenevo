@@ -83,6 +83,10 @@ sdk.dir=C:\\Android\\Sdk
 - [x] Rich timeline scrubber + Media3 preview player  
 - [x] Burn-in subtitles + SRT sidecar  
 - [x] Music attach + volume ducking  
+- [x] Persistable gallery URIs + MediaStore publish / share  
+- [x] Project delete + duplicate  
+- [x] Editor scene reorder / duration / transitions  
+- [x] Export resolution presets (720p / 1080p / 4K)  
 - [ ] FFmpeg advanced transitions (behind `VideoRenderer`)  
 - [ ] Piper ONNX local neural TTS pack  
 - [ ] Stock cache (Pexels) with explicit user consent + Wi‑Fi only  

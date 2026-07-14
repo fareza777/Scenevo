@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.scenevo.domain.model.ExportResolution
+import com.scenevo.domain.model.Project
 import com.scenevo.domain.model.ProjectStatus
 import com.scenevo.domain.model.RenderStatus
 import com.scenevo.domain.repository.ProjectRepository
@@ -18,9 +20,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class ExportUiState(
+    val project: Project? = null,
     val status: RenderStatus = RenderStatus.QUEUED,
     val progress: Float = 0f,
-    val message: String = "Waiting…",
+    val message: String = "Pilih kualitas, lalu render.",
     val outputPath: String? = null,
     val galleryUri: String? = null,
     val shareReady: Boolean = false,
@@ -43,9 +46,40 @@ class ExportViewModel @Inject constructor(
 
     private var lastShareIntent: Intent? = null
 
-    fun startIfNeeded() {
+    init {
+        viewModelScope.launch {
+            val project = projectRepository.getProject(projectId)
+            _uiState.update { it.copy(project = project) }
+        }
+    }
+
+    fun setResolution(resolution: ExportResolution) {
+        viewModelScope.launch {
+            val current = projectRepository.getProject(projectId) ?: return@launch
+            val updated = current.copy(
+                exportSettings = current.exportSettings.copy(resolution = resolution),
+                updatedAt = System.currentTimeMillis(),
+            )
+            projectRepository.upsert(updated)
+            _uiState.update { it.copy(project = updated) }
+        }
+    }
+
+    fun setIncludeMusic(include: Boolean) {
+        viewModelScope.launch {
+            val current = projectRepository.getProject(projectId) ?: return@launch
+            val updated = current.copy(
+                exportSettings = current.exportSettings.copy(includeMusic = include),
+                updatedAt = System.currentTimeMillis(),
+            )
+            projectRepository.upsert(updated)
+            _uiState.update { it.copy(project = updated) }
+        }
+    }
+
+    fun startExport() {
         if (_uiState.value.started) return
-        _uiState.update { it.copy(started = true) }
+        _uiState.update { it.copy(started = true, message = "Preparing…") }
         viewModelScope.launch {
             val project = projectRepository.getProject(projectId)
             if (project == null) {

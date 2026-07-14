@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.audio.AudioProcessor
+import androidx.media3.effect.Presentation
 import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
@@ -13,7 +14,9 @@ import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
+import com.scenevo.domain.model.AspectRatio
 import com.scenevo.domain.model.AudioKind
+import com.scenevo.domain.model.ExportResolution
 import com.scenevo.domain.model.MediaType
 import com.scenevo.domain.model.MotionEffect
 import com.scenevo.domain.model.Project
@@ -88,14 +91,12 @@ class Media3VideoRenderer @Inject constructor(
         job = job.copy(status = RenderStatus.RENDERING, progress = 0.15f)
         onProgress(RenderProgress(job, "Rendering on device…"))
 
+        val outputSize = resolveOutputSize(project.aspectRatio, project.exportSettings.resolution)
         val editedItems = buildList {
             timeline.clips.forEachIndexed { index, clip ->
                 if (index > 0) {
-                    val transition = clip.transition
-                    if (transition == TransitionType.CROSSFADE ||
-                        transition == TransitionType.FADE_TO_BLACK
-                    ) {
-                        add(blackBumper(context, durationUs = 280_000L))
+                    bumperDurationUs(clip.transition)?.let { us ->
+                        add(blackBumper(context, durationUs = us))
                     }
                 }
 
@@ -111,6 +112,13 @@ class Media3VideoRenderer @Inject constructor(
                     .build()
 
                 val videoEffects = buildList {
+                    add(
+                        Presentation.createForWidthAndHeight(
+                            outputSize.first,
+                            outputSize.second,
+                            Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP,
+                        ),
+                    )
                     add(motionEffect(clip.motion))
                     val cueText = timeline.subtitleCues
                         .firstOrNull { it.startMs == clip.startMs && it.endMs == clip.endMs }
@@ -134,6 +142,7 @@ class Media3VideoRenderer @Inject constructor(
         )
 
         timeline.audioLayers.forEach { layer ->
+            if (layer.kind == AudioKind.MUSIC && !project.exportSettings.includeMusic) return@forEach
             val processors = mutableListOf<AudioProcessor>()
             if (layer.kind == AudioKind.MUSIC) {
                 processors += GainAudioProcessor(layer.volume.coerceIn(0.05f, 1f))
@@ -184,6 +193,26 @@ class Media3VideoRenderer @Inject constructor(
                 }
             },
         )
+    }
+
+    private fun bumperDurationUs(transition: TransitionType): Long? = when (transition) {
+        TransitionType.CUT -> null
+        TransitionType.CROSSFADE -> 200_000L
+        TransitionType.FADE_TO_BLACK -> 420_000L
+        TransitionType.SLIDE_LEFT, TransitionType.ZOOM -> 280_000L
+    }
+
+    private fun resolveOutputSize(aspect: AspectRatio, resolution: ExportResolution): Pair<Int, Int> {
+        val shortSide = when (resolution) {
+            ExportResolution.SD_720 -> 720
+            ExportResolution.HD_1080 -> 1080
+            ExportResolution.UHD_4K -> 2160
+        }
+        return when (aspect) {
+            AspectRatio.VERTICAL_9_16 -> shortSide to (shortSide * 16 / 9)
+            AspectRatio.SQUARE_1_1 -> shortSide to shortSide
+            AspectRatio.HORIZONTAL_16_9 -> (shortSide * 16 / 9) to shortSide
+        }
     }
 
     private fun motionEffect(motion: MotionEffect) = when (motion) {

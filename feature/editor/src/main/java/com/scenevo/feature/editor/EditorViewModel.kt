@@ -7,6 +7,7 @@ import com.scenevo.domain.model.AspectRatio
 import com.scenevo.domain.model.MotionEffect
 import com.scenevo.domain.model.Project
 import com.scenevo.domain.model.Timeline
+import com.scenevo.domain.model.TransitionType
 import com.scenevo.domain.repository.ProjectRepository
 import com.scenevo.engine.timeline.TimelineComposer
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -56,6 +57,42 @@ class EditorViewModel @Inject constructor(
             }
         }
         project.copy(scenes = scenes)
+    }
+
+    fun cycleTransition(sceneId: String) = updateProject { project ->
+        val transitions = TransitionType.entries
+        val scenes = project.scenes.map { scene ->
+            if (scene.id != sceneId) scene
+            else {
+                val next = transitions[(transitions.indexOf(scene.transition) + 1) % transitions.size]
+                scene.copy(transition = next)
+            }
+        }
+        project.copy(scenes = scenes)
+    }
+
+    fun nudgeDuration(sceneId: String, deltaMs: Long) = updateProject { project ->
+        val scenes = project.scenes.map { scene ->
+            if (scene.id != sceneId) scene
+            else scene.copy(durationMs = (scene.durationMs + deltaMs).coerceIn(1_500L, 30_000L))
+        }
+        project.copy(scenes = scenes)
+    }
+
+    fun moveScene(sceneId: String, direction: Int) = updateProject { project ->
+        val ordered = project.scenes.sortedBy { it.index }.toMutableList()
+        val from = ordered.indexOfFirst { it.id == sceneId }
+        if (from < 0) return@updateProject project
+        val to = (from + direction).coerceIn(0, ordered.lastIndex)
+        if (from == to) return@updateProject project
+        val item = ordered.removeAt(from)
+        ordered.add(to, item)
+        project.copy(scenes = ordered.mapIndexed { index, scene -> scene.copy(index = index) })
+    }
+
+    fun setMusicVolume(volume: Float) = updateProject { project ->
+        val music = project.musicTrack ?: return@updateProject project
+        project.copy(musicTrack = music.copy(volume = volume.coerceIn(0.05f, 1f)))
     }
 
     private fun updateProject(transform: (Project) -> Project) {

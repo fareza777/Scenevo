@@ -1,11 +1,14 @@
 package com.scenevo.feature.export
 
+import android.content.Intent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,13 +16,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
@@ -27,13 +35,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.content.Intent
 import com.scenevo.core.designsystem.component.BrandMark
 import com.scenevo.core.designsystem.component.ScenevoBackdrop
 import com.scenevo.core.designsystem.component.ScenevoPrimaryButton
 import com.scenevo.core.designsystem.component.ScenevoSecondaryButton
 import com.scenevo.core.designsystem.component.ScreenSection
 import com.scenevo.core.designsystem.theme.ScenevoColors
+import com.scenevo.domain.model.ExportResolution
 import com.scenevo.domain.model.RenderStatus
 
 @Composable
@@ -44,10 +52,8 @@ fun ExportRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val animatedProgress by animateFloatAsState(targetValue = state.progress, label = "exportProgress")
     val context = LocalContext.current
-
-    LaunchedEffect(Unit) {
-        viewModel.startIfNeeded()
-    }
+    val project = state.project
+    val settings = project?.exportSettings
 
     ScenevoBackdrop {
         Column(
@@ -62,9 +68,69 @@ fun ExportRoute(
             Spacer(Modifier.height(8.dp))
             ScreenSection(
                 eyebrow = "Export bay",
-                title = "On-device render",
-                body = "Visuals, ducked music, burn-in subtitle, MP4 + SRT — semua di HP kamu.",
+                title = if (state.started) "On-device render" else "Siapkan export",
+                body = if (state.started) {
+                    "Visuals, ducked music, burn-in subtitle, MP4 + SRT — semua di HP kamu."
+                } else {
+                    "Pilih resolusi. Render lokal tanpa kredit — file masuk Movies/Scenevo."
+                },
             )
+
+            if (!state.started && settings != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Resolusi", style = MaterialTheme.typography.labelLarge, color = ScenevoColors.Cue)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ExportResolution.entries.forEach { res ->
+                            FilterChip(
+                                selected = settings.resolution == res,
+                                onClick = { viewModel.setResolution(res) },
+                                label = { Text(res.label) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = ScenevoColors.Cue.copy(alpha = 0.18f),
+                                    selectedLabelColor = ScenevoColors.CueHot,
+                                    containerColor = ScenevoColors.Panel,
+                                    labelColor = ScenevoColors.MistDim,
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = settings.resolution == res,
+                                    borderColor = ScenevoColors.Line,
+                                    selectedBorderColor = ScenevoColors.Cue.copy(alpha = 0.5f),
+                                ),
+                            )
+                        }
+                    }
+                    if (project.musicTrack != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(ScenevoColors.Panel)
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                        ) {
+                            Text(
+                                "Sertakan musik",
+                                color = ScenevoColors.Mist,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Switch(
+                                checked = settings.includeMusic,
+                                onCheckedChange = viewModel::setIncludeMusic,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = ScenevoColors.Ink,
+                                    checkedTrackColor = ScenevoColors.Cue,
+                                    uncheckedThumbColor = ScenevoColors.MistDim,
+                                    uncheckedTrackColor = ScenevoColors.Line,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
 
             Box(
                 modifier = Modifier
@@ -76,20 +142,26 @@ fun ExportRoute(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(
-                        text = "${(animatedProgress * 100).toInt()}%",
+                        text = if (state.started) {
+                            "${(animatedProgress * 100).toInt()}%"
+                        } else {
+                            settings?.resolution?.label ?: "—"
+                        },
                         style = MaterialTheme.typography.displayMedium,
                         color = ScenevoColors.Cue,
                     )
-                    LinearProgressIndicator(
-                        progress = { animatedProgress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = ScenevoColors.Cue,
-                        trackColor = ScenevoColors.Line,
-                        strokeCap = StrokeCap.Round,
-                    )
+                    if (state.started) {
+                        LinearProgressIndicator(
+                            progress = { animatedProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = ScenevoColors.Cue,
+                            trackColor = ScenevoColors.Line,
+                            strokeCap = StrokeCap.Round,
+                        )
+                    }
                     Text(state.message, style = MaterialTheme.typography.bodyLarge, color = ScenevoColors.Mist)
                     state.publishMessage?.let {
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = ScenevoColors.Signal)
@@ -106,8 +178,12 @@ fun ExportRoute(
 
             Spacer(Modifier.weight(1f))
 
-            when (state.status) {
-                RenderStatus.COMPLETED -> {
+            when {
+                !state.started -> {
+                    ScenevoPrimaryButton("Mulai render", onClick = viewModel::startExport)
+                    ScenevoSecondaryButton("Kembali", onClick = onBack)
+                }
+                state.status == RenderStatus.COMPLETED -> {
                     if (state.shareReady) {
                         ScenevoPrimaryButton(
                             text = "Bagikan video",
@@ -122,7 +198,7 @@ fun ExportRoute(
                     }
                     ScenevoSecondaryButton("Selesai", onClick = onBack)
                 }
-                RenderStatus.FAILED, RenderStatus.CANCELLED -> {
+                state.status == RenderStatus.FAILED || state.status == RenderStatus.CANCELLED -> {
                     ScenevoPrimaryButton("Kembali", onClick = onBack)
                 }
                 else -> {
