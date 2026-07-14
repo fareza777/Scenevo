@@ -23,9 +23,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Intent
 import com.scenevo.core.designsystem.component.BrandMark
 import com.scenevo.core.designsystem.component.ScenevoBackdrop
 import com.scenevo.core.designsystem.component.ScenevoPrimaryButton
@@ -41,6 +43,7 @@ fun ExportRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val animatedProgress by animateFloatAsState(targetValue = state.progress, label = "exportProgress")
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.startIfNeeded()
@@ -88,8 +91,11 @@ fun ExportRoute(
                         strokeCap = StrokeCap.Round,
                     )
                     Text(state.message, style = MaterialTheme.typography.bodyLarge, color = ScenevoColors.Mist)
+                    state.publishMessage?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = ScenevoColors.Signal)
+                    }
                     state.outputPath?.let {
-                        Text("Saved", style = MaterialTheme.typography.labelMedium, color = ScenevoColors.Cue)
+                        Text("File", style = MaterialTheme.typography.labelMedium, color = ScenevoColors.Cue)
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = ScenevoColors.MistDim)
                     }
                     state.error?.let {
@@ -101,8 +107,23 @@ fun ExportRoute(
             Spacer(Modifier.weight(1f))
 
             when (state.status) {
-                RenderStatus.COMPLETED, RenderStatus.FAILED, RenderStatus.CANCELLED -> {
-                    ScenevoPrimaryButton("Selesai", onClick = onBack)
+                RenderStatus.COMPLETED -> {
+                    if (state.shareReady) {
+                        ScenevoPrimaryButton(
+                            text = "Bagikan video",
+                            onClick = {
+                                viewModel.consumeShareIntent()?.let { intent ->
+                                    context.startActivity(
+                                        Intent.createChooser(intent, "Share Scenevo export"),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                    ScenevoSecondaryButton("Selesai", onClick = onBack)
+                }
+                RenderStatus.FAILED, RenderStatus.CANCELLED -> {
+                    ScenevoPrimaryButton("Kembali", onClick = onBack)
                 }
                 else -> {
                     ScenevoSecondaryButton("Tutup", onClick = onBack)

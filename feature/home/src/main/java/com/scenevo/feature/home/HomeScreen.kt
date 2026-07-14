@@ -17,12 +17,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -46,6 +47,7 @@ fun HomeRoute(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val projects by viewModel.projects.collectAsStateWithLifecycle()
+    val extras by viewModel.extras.collectAsStateWithLifecycle()
     val motion = LocalScenevoMotion.current
 
     ScenevoBackdrop {
@@ -74,7 +76,7 @@ fun HomeRoute(
                 )
             } else {
                 Text(
-                    text = "RECENT CUTS",
+                    text = "RECENT CUTS  ·  long-press to delete",
                     color = ScenevoColors.MistDim,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
@@ -83,7 +85,7 @@ fun HomeRoute(
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    itemsIndexed(projects, key = { _, p -> p.id }) { index, project ->
+                    itemsIndexed(projects, key = { _, p -> p.id }) { _, project ->
                         AnimatedVisibility(
                             visible = true,
                             enter = fadeIn(motion.fade) + slideInVertically { it / 8 },
@@ -93,6 +95,7 @@ fun HomeRoute(
                                 meta = projectMeta(project),
                                 status = project.status.name,
                                 onClick = { onOpenProject(project.id) },
+                                onLongClick = { viewModel.requestDelete(project) },
                             )
                         }
                     }
@@ -111,6 +114,29 @@ fun HomeRoute(
                 )
             }
         }
+    }
+
+    extras.pendingDelete?.let { project ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissDelete,
+            title = { Text("Hapus montage?") },
+            text = {
+                Text("\"${project.title}\" akan dihapus dari perangkat. File export di Movies/Scenevo tetap ada.")
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmDelete) {
+                    Text("Hapus", color = ScenevoColors.Danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissDelete) {
+                    Text("Batal", color = ScenevoColors.MistDim)
+                }
+            },
+            containerColor = ScenevoColors.Panel,
+            titleContentColor = ScenevoColors.Mist,
+            textContentColor = ScenevoColors.MistDim,
+        )
     }
 }
 

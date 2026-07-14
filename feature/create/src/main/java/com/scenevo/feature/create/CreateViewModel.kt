@@ -1,7 +1,9 @@
 package com.scenevo.feature.create
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.scenevo.core.common.PersistableUri
 import com.scenevo.domain.model.MediaType
 import com.scenevo.domain.model.MotionEffect
 import com.scenevo.domain.model.MusicTrack
@@ -16,6 +18,7 @@ import com.scenevo.domain.usecase.CreateProjectUseCase
 import com.scenevo.domain.usecase.SplitScriptIntoScenesUseCase
 import com.scenevo.engine.tts.NarrationEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +45,7 @@ data class CreateUiState(
 
 @HiltViewModel
 class CreateViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val splitScript: SplitScriptIntoScenesUseCase,
     private val createProject: CreateProjectUseCase,
     private val projectRepository: ProjectRepository,
@@ -71,6 +75,7 @@ class CreateViewModel @Inject constructor(
 
     fun attachVisuals(uris: List<String>) {
         if (uris.isEmpty()) return
+        PersistableUri.takeReadAll(context, uris)
         val assets = uris.mapIndexed { index, uri ->
             val isVideo = uri.contains("video", ignoreCase = true)
             VisualAsset(
@@ -131,6 +136,7 @@ class CreateViewModel @Inject constructor(
     }
 
     fun attachMusic(uri: String) {
+        PersistableUri.takeRead(context, uri)
         val name = uri.substringAfterLast('/').substringAfterLast('%').ifBlank { "Background music" }
         _uiState.update {
             it.copy(

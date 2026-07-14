@@ -11,9 +11,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -319,6 +321,7 @@ fun StepChipRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProjectTile(
     title: String,
@@ -326,6 +329,7 @@ fun ProjectTile(
     status: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
     Column(
@@ -334,7 +338,22 @@ fun ProjectTile(
             .clip(RoundedCornerShape(16.dp))
             .background(ScenevoColors.Panel)
             .border(1.dp, ScenevoColors.Line, RoundedCornerShape(16.dp))
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                    )
+                } else {
+                    Modifier.clickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClick = onClick,
+                    )
+                },
+            )
             .padding(18.dp),
     ) {
         Row(

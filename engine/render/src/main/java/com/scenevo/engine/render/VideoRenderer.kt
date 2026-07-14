@@ -19,6 +19,7 @@ import com.scenevo.domain.model.MotionEffect
 import com.scenevo.domain.model.Project
 import com.scenevo.domain.model.RenderJob
 import com.scenevo.domain.model.RenderStatus
+import com.scenevo.domain.model.TransitionType
 import com.scenevo.engine.timeline.TimelineComposer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -87,32 +88,45 @@ class Media3VideoRenderer @Inject constructor(
         job = job.copy(status = RenderStatus.RENDERING, progress = 0.15f)
         onProgress(RenderProgress(job, "Rendering on device…"))
 
-        val editedItems = timeline.clips.map { clip ->
-            val mediaItem = MediaItem.Builder()
-                .setUri(Uri.parse(clip.mediaUri))
-                .setMimeType(
-                    when (clip.mediaType) {
-                        MediaType.VIDEO -> MimeTypes.VIDEO_MP4
-                        MediaType.IMAGE -> MimeTypes.IMAGE_JPEG
-                        MediaType.AUDIO -> MimeTypes.AUDIO_AAC
-                    },
+        val editedItems = buildList {
+            timeline.clips.forEachIndexed { index, clip ->
+                if (index > 0) {
+                    val transition = clip.transition
+                    if (transition == TransitionType.CROSSFADE ||
+                        transition == TransitionType.FADE_TO_BLACK
+                    ) {
+                        add(blackBumper(context, durationUs = 280_000L))
+                    }
+                }
+
+                val mediaItem = MediaItem.Builder()
+                    .setUri(Uri.parse(clip.mediaUri))
+                    .setMimeType(
+                        when (clip.mediaType) {
+                            MediaType.VIDEO -> MimeTypes.VIDEO_MP4
+                            MediaType.IMAGE -> MimeTypes.IMAGE_JPEG
+                            MediaType.AUDIO -> MimeTypes.AUDIO_AAC
+                        },
+                    )
+                    .build()
+
+                val videoEffects = buildList {
+                    add(motionEffect(clip.motion))
+                    val cueText = timeline.subtitleCues
+                        .firstOrNull { it.startMs == clip.startMs && it.endMs == clip.endMs }
+                        ?.text
+                        ?: project.scenes.firstOrNull { it.id == clip.sceneId }?.text
+                    SubtitleOverlayFactory.create(cueText.orEmpty(), project.subtitleStyle)?.let { add(it) }
+                }
+
+                add(
+                    EditedMediaItem.Builder(mediaItem)
+                        .setDurationUs((clip.endMs - clip.startMs) * 1000)
+                        .setRemoveAudio(true)
+                        .setEffects(Effects(/* audioProcessors = */ emptyList(), videoEffects))
+                        .build(),
                 )
-                .build()
-
-            val videoEffects = buildList {
-                add(motionEffect(clip.motion))
-                val cueText = timeline.subtitleCues
-                    .firstOrNull { it.startMs == clip.startMs && it.endMs == clip.endMs }
-                    ?.text
-                    ?: project.scenes.firstOrNull { it.id == clip.sceneId }?.text
-                SubtitleOverlayFactory.create(cueText.orEmpty(), project.subtitleStyle)?.let { add(it) }
             }
-
-            EditedMediaItem.Builder(mediaItem)
-                .setDurationUs((clip.endMs - clip.startMs) * 1000)
-                .setRemoveAudio(true)
-                .setEffects(Effects(/* audioProcessors = */ emptyList(), videoEffects))
-                .build()
         }
 
         val sequences = mutableListOf(
@@ -180,6 +194,17 @@ class Media3VideoRenderer @Inject constructor(
         MotionEffect.PAN_LEFT,
         MotionEffect.PAN_RIGHT,
         -> ScaleAndRotateTransformation.Builder().setScale(1.12f, 1.12f).build()
+    }
+
+    private fun blackBumper(context: Context, durationUs: Long): EditedMediaItem {
+        val mediaItem = MediaItem.Builder()
+            .setUri(Uri.fromFile(File(BlackFrameProvider.getUri(context))))
+            .setMimeType(MimeTypes.IMAGE_PNG)
+            .build()
+        return EditedMediaItem.Builder(mediaItem)
+            .setDurationUs(durationUs)
+            .setRemoveAudio(true)
+            .build()
     }
 
     private suspend fun runTransformer(

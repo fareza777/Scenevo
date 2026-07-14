@@ -20,6 +20,7 @@ dependencies {
     implementation(project(":domain"))
     implementation(project(":engine:timeline"))
     implementation(project(":core:common"))
+    implementation(libs.androidx.core.ktx)
     implementation(libs.media3.common)
     implementation(libs.media3.transformer)
     implementation(libs.media3.effect)
