@@ -4,22 +4,25 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -36,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -43,6 +47,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.scenevo.core.common.MediaUris
 import com.scenevo.core.designsystem.theme.ScenevoColors
@@ -61,6 +66,7 @@ fun MontagePreviewPlayer(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val clips = timeline?.clips.orEmpty()
     val cues = timeline?.subtitleCues.orEmpty()
     val aspect = when (project.aspectRatio) {
@@ -81,6 +87,19 @@ fun MontagePreviewPlayer(
     var durationMs by remember { mutableFloatStateOf(timeline?.totalDurationMs?.toFloat() ?: 1f) }
     var currentSubtitle by remember { mutableStateOf<String?>(null) }
     var playbackError by remember { mutableStateOf<String?>(null) }
+
+    fun togglePlay() {
+        if (player.isPlaying) {
+            player.pause()
+            playing = false
+        } else {
+            if (player.playbackState == Player.STATE_ENDED) {
+                player.seekTo(0, 0)
+            }
+            player.play()
+            playing = true
+        }
+    }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -139,7 +158,6 @@ fun MontagePreviewPlayer(
     LaunchedEffect(player, playing) {
         while (true) {
             val pos = player.currentPosition.coerceAtLeast(0L)
-            // Approximate global position across playlist by summing prior clip durations
             val window = player.currentMediaItemIndex.coerceAtLeast(0)
             val prior = clips.take(window).sumOf { it.endMs - it.startMs }
             val global = (prior + pos).toFloat()
@@ -151,95 +169,111 @@ fun MontagePreviewPlayer(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(aspect)
-                .clip(RoundedCornerShape(16.dp))
-                .background(ScenevoColors.FilmGate),
+                .heightIn(max = 260.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        useController = false
-                        layoutParams = FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                        )
-                        this.player = player
-                        setShutterBackgroundColor(android.graphics.Color.parseColor("#0F1217"))
-                    }
-                },
-                update = { it.player = player },
-                modifier = Modifier.fillMaxSize(),
-            )
+            val maxHPx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+            val maxWPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+            val heightByWidth = maxWPx / aspect
+            val previewHPx = minOf(heightByWidth, maxHPx, with(density) { 260.dp.toPx() })
+            val previewWPx = previewHPx * aspect
 
-            if (project.subtitleStyle.enabled && !currentSubtitle.isNullOrBlank()) {
-                Text(
-                    text = currentSubtitle.orEmpty(),
-                    color = ScenevoColors.Mist,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(ScenevoColors.Ink.copy(alpha = 0.72f))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+            Box(
+                modifier = Modifier
+                    .width(with(density) { previewWPx.toDp() })
+                    .height(with(density) { previewHPx.toDp() })
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(ScenevoColors.FilmGate)
+                    .clickable(onClick = ::togglePlay),
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            useController = false
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            layoutParams = FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                            )
+                            this.player = player
+                            setShutterBackgroundColor(android.graphics.Color.parseColor("#0F1217"))
+                        }
+                    },
+                    update = { it.player = player },
+                    modifier = Modifier.fillMaxSize(),
                 )
-            }
 
-            if (clips.isEmpty()) {
-                Text(
-                    "Add visuals to preview",
-                    color = ScenevoColors.MistDim,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            }
-            if (playbackError != null) {
-                Text(
-                    playbackError.orEmpty(),
-                    color = ScenevoColors.Danger,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
+                // Big play/pause affordance — always visible on the frame.
+                Box(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .padding(16.dp),
-                )
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(ScenevoColors.Ink.copy(alpha = 0.55f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (playing && player.isPlaying) {
+                            Icons.Filled.Pause
+                        } else {
+                            Icons.Filled.PlayArrow
+                        },
+                        contentDescription = "Play/Pause",
+                        tint = ScenevoColors.CueHot,
+                        modifier = Modifier.size(36.dp),
+                    )
+                }
+
+                if (project.subtitleStyle.enabled && !currentSubtitle.isNullOrBlank()) {
+                    Text(
+                        text = currentSubtitle.orEmpty(),
+                        color = ScenevoColors.Mist,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(10.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(ScenevoColors.Ink.copy(alpha = 0.72f))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
+
+                if (clips.isEmpty()) {
+                    Text(
+                        "Add visuals to preview",
+                        color = ScenevoColors.MistDim,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
+                if (playbackError != null) {
+                    Text(
+                        playbackError.orEmpty(),
+                        color = ScenevoColors.Danger,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(12.dp),
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            IconButton(
-                onClick = {
-                    if (player.isPlaying) {
-                        player.pause()
-                        playing = false
-                    } else {
-                        if (player.playbackState == Player.STATE_ENDED) {
-                            player.seekTo(0, 0)
-                        }
-                        player.play()
-                        playing = true
-                    }
-                },
-            ) {
-                Icon(
-                    imageVector = if (playing && player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = "Play/Pause",
-                    tint = ScenevoColors.Cue,
-                )
-            }
             Text(
                 formatMs(positionMs.toLong()),
                 style = MaterialTheme.typography.labelLarge,
                 color = ScenevoColors.MistDim,
-                modifier = Modifier.width(48.dp),
+                modifier = Modifier.width(40.dp),
             )
             Slider(
                 value = positionMs.coerceIn(0f, durationMs),
@@ -259,16 +293,7 @@ fun MontagePreviewPlayer(
                 formatMs(durationMs.toLong()),
                 style = MaterialTheme.typography.labelLarge,
                 color = ScenevoColors.MistDim,
-                modifier = Modifier.width(48.dp),
-            )
-        }
-
-        val imageHint = clips.any { it.mediaType == MediaType.IMAGE }
-        if (imageHint) {
-            Text(
-                "Preview: foto tampil sebagai still. Tekan ▶ untuk play. Suara baru di export.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = ScenevoColors.MistDim,
+                modifier = Modifier.width(40.dp),
             )
         }
     }

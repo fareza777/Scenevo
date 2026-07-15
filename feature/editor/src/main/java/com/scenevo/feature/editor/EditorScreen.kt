@@ -36,7 +36,6 @@ import com.scenevo.core.designsystem.component.FilmPanel
 import com.scenevo.core.designsystem.component.ScenevoBackdrop
 import com.scenevo.core.designsystem.component.ScenevoPrimaryButton
 import com.scenevo.core.designsystem.component.ScenevoSecondaryButton
-import com.scenevo.core.designsystem.component.ScreenSection
 import com.scenevo.core.designsystem.component.SegmentedChoice
 import com.scenevo.core.designsystem.theme.ScenevoColors
 import com.scenevo.domain.model.AspectRatio
@@ -57,64 +56,89 @@ fun EditorRoute(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = 20.dp, vertical = 10.dp),
         ) {
             BrandMark(compact = true)
+            Spacer(Modifier.height(8.dp))
 
             if (project == null) {
                 Text("Loading cut…", color = ScenevoColors.MistDim)
                 return@Column
             }
 
-            ScreenSection(
-                eyebrow = "Editor",
-                title = project.title,
-                body = "${state.timeline?.clips?.size ?: 0} clips · " +
+            Text(
+                text = "EDITOR",
+                style = MaterialTheme.typography.labelMedium,
+                color = ScenevoColors.Cue,
+            )
+            Text(
+                text = project.title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = ScenevoColors.Mist,
+            )
+            Text(
+                text = "${state.timeline?.clips?.size ?: 0} clips · " +
                     "${"%.1f".format((state.timeline?.totalDurationMs ?: 0) / 1000f)}s · " +
                     project.aspectRatio.label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = ScenevoColors.MistDim,
             )
+            Spacer(Modifier.height(10.dp))
 
+            // Compact preview — full 9:16 height was pushing Play/Export off-screen.
             MontagePreviewPlayer(
                 project = project,
                 timeline = state.timeline,
                 modifier = Modifier
+                    .fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp))
                     .border(1.dp, ScenevoColors.Line, RoundedCornerShape(18.dp)),
             )
 
-            Text("Aspect ratio", style = MaterialTheme.typography.labelLarge, color = ScenevoColors.Cue)
-            SegmentedChoice(
-                options = AspectRatio.entries.map { it.label },
-                selectedIndex = AspectRatio.entries.indexOf(project.aspectRatio).coerceAtLeast(0),
-                onSelect = { index -> viewModel.setAspectRatio(AspectRatio.entries[index]) },
-            )
-
-            FilmPanel {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Burn-in subtitles",
-                        color = ScenevoColors.Mist,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Switch(
-                        checked = project.subtitleStyle.enabled,
-                        onCheckedChange = viewModel::setSubtitlesEnabled,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = ScenevoColors.Ink,
-                            checkedTrackColor = ScenevoColors.Cue,
-                            uncheckedThumbColor = ScenevoColors.MistDim,
-                            uncheckedTrackColor = ScenevoColors.Line,
-                        ),
-                    )
-                }
-            }
+            Spacer(Modifier.height(10.dp))
 
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                itemsIndexed(project.scenes.sortedBy { it.index }, key = { _, s -> s.id }) { index, scene ->
+                item {
+                    Text(
+                        "Aspect ratio",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = ScenevoColors.Cue,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    SegmentedChoice(
+                        options = AspectRatio.entries.map { it.label },
+                        selectedIndex = AspectRatio.entries.indexOf(project.aspectRatio).coerceAtLeast(0),
+                        onSelect = { index -> viewModel.setAspectRatio(AspectRatio.entries[index]) },
+                    )
+                }
+                item {
+                    FilmPanel {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Burn-in subtitles",
+                                color = ScenevoColors.Mist,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Switch(
+                                checked = project.subtitleStyle.enabled,
+                                onCheckedChange = viewModel::setSubtitlesEnabled,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = ScenevoColors.Ink,
+                                    checkedTrackColor = ScenevoColors.Cue,
+                                    uncheckedThumbColor = ScenevoColors.MistDim,
+                                    uncheckedTrackColor = ScenevoColors.Line,
+                                ),
+                            )
+                        }
+                    }
+                }
+                itemsIndexed(
+                    project.scenes.sortedBy { it.index },
+                    key = { _, s -> s.id },
+                ) { index, scene ->
                     SceneEditCard(
                         scene = scene,
                         canMoveUp = index > 0,
@@ -126,35 +150,39 @@ fun EditorRoute(
                         onCycleTransition = { viewModel.cycleTransition(scene.id) },
                     )
                 }
-            }
-
-            val music = project.musicTrack
-            if (music != null) {
-                FilmPanel {
-                    Text(
-                        "Music · ${music.displayName}",
-                        color = ScenevoColors.Mist,
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    Text(
-                        "Ducked under voice · ${(music.volume * 100).toInt()}%",
-                        color = ScenevoColors.MistDim,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Slider(
-                        value = music.volume,
-                        onValueChange = viewModel::setMusicVolume,
-                        valueRange = 0.05f..1f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = ScenevoColors.Cue,
-                            activeTrackColor = ScenevoColors.Cue,
-                            inactiveTrackColor = ScenevoColors.Line,
-                        ),
-                    )
+                val music = project.musicTrack
+                if (music != null) {
+                    item {
+                        FilmPanel {
+                            Text(
+                                "Music · ${music.displayName}",
+                                color = ScenevoColors.Mist,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                            Text(
+                                "Ducked under voice · ${(music.volume * 100).toInt()}%",
+                                color = ScenevoColors.MistDim,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Slider(
+                                value = music.volume,
+                                onValueChange = viewModel::setMusicVolume,
+                                valueRange = 0.05f..1f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = ScenevoColors.Cue,
+                                    activeTrackColor = ScenevoColors.Cue,
+                                    inactiveTrackColor = ScenevoColors.Line,
+                                ),
+                            )
+                        }
+                    }
                 }
+                item { Spacer(Modifier.height(8.dp)) }
             }
 
+            // Sticky actions — always visible above nav bar.
             ScenevoPrimaryButton("Export video", onClick = { onExport(project.id) })
+            Spacer(Modifier.height(8.dp))
             ScenevoSecondaryButton("Kembali", onClick = onBack)
         }
     }
